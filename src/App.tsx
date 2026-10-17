@@ -97,6 +97,8 @@ function AssistantPanel({
       if (trimmed.toLowerCase().includes("wheelchair")) devices.push("power_wheelchair");
 
       const result = await fetchPlan({
+        message: trimmed,
+        history: messages.slice(1).slice(-6),
         resident: {
           name: "Rosa Martinez",
           age: 78,
@@ -108,13 +110,22 @@ function AssistantPanel({
         forecast: { probability: 0.74, primaryCause: "wind" },
       });
 
-      onPlanItems(result.items);
+      if (result.items.length) onPlanItems(result.items);
 
-      const summary = result.items.slice(0, 3).map((item) => `• ${item.title_en}`).join("\n");
-      const sourceNote = result.source === "fallback" ? " (using template plan — connect watsonx for personalised responses)" : "";
+      const fallbackNote = {
+        missing_credentials: "Add watsonx credentials to the plan service.",
+        project_unavailable: "IBM could not find the configured project. Check its project ID and region.",
+        runtime_unavailable: "Connect a watsonx.ai Runtime service to this IBM project.",
+        model_unavailable: "The configured watsonx model is unavailable. Check its model ID.",
+        access_denied: "The IBM API key does not have access to this project.",
+        watsonx_error: "The watsonx request failed. Check the plan service log.",
+      } as const;
+      const sourceNote = result.source === "fallback"
+        ? `\n\nUsing template steps: ${result.fallback_reason ? fallbackNote[result.fallback_reason] : "watsonx is unavailable."}`
+        : "";
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", text: `I've added ${result.items.length} steps to your plan${sourceNote}:\n${summary}${result.items.length > 3 ? "\n…and more below." : ""}` },
+        { role: "assistant", text: `${result.reply}${result.items.length ? "\n\nI added related steps to your plan below." : ""}${sourceNote}` },
       ]);
     } catch {
       setMessages((prev) => [
@@ -135,7 +146,7 @@ function AssistantPanel({
           <h2 id="assistant-title">Talk through your plan</h2>
         </div>
       </div>
-      <p className="assistant-disclaimer">Powered by watsonx.ai. Falls back to static templates when credentials are not configured.</p>
+      <p className="assistant-disclaimer">Powered by watsonx.ai. Uses template steps if the service is unavailable.</p>
       <div className="chat-feed" role="log" aria-label="Plan assistant conversation" aria-live="polite">
         {messages.map((message, index) => (
           <div className={`chat-bubble ${message.role}`} key={index}>
@@ -186,13 +197,16 @@ export default function App() {
   /** Convert watsonx ApiPlanItems into PlanItems and merge into the plan list. */
   function handleAssistantPlanItems(items: ApiPlanItem[]) {
     const newItems: PlanItem[] = items.map((item, i) => ({
-      id: `assistant-${i}-${item.when}`,
+      id: `assistant-${item.when}-${item.title_en.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${i}`,
       when: whenLabel(item.when),
       title: item.title_en,
       why: item.reason_en,
       category: "essential" as const,
     }));
-    setAssistantItems(newItems);
+    setAssistantItems((current) => {
+      const titles = new Set(current.map((item) => item.title.toLowerCase()));
+      return [...current, ...newItems.filter((item) => !titles.has(item.title.toLowerCase()))];
+    });
   }
 
   return (

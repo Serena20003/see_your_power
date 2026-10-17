@@ -15,6 +15,8 @@ npm run dev
 
 Open the local address Vite prints. `npm run build` creates a static site in `dist/`.
 
+The county risk map uses the [Carbon Gray 10 Mapbox style](https://www.carbondesignsystem.com/building-blocks/data-visualization/spatial-charts/#mapbox). For local development, set `VITE_MAPBOX_ACCESS_TOKEN` to a Mapbox public access token in an ignored `.env.development.local` file. Set the same variable in the deployment environment when building the site. County risk dots are GeoJSON layers on the map, so they stay aligned while panning and zooming.
+
 ## Current interaction
 
 The first-use questions ask about care needs, flexible routines, costs, and family check-ins. You can answer them or continue with the sample profile. Select a forecast day and toggle between power, wind, heat, and sample energy-cost layers. The schematic map stays centered on the example resident's area.

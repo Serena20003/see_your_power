@@ -29,6 +29,19 @@ uvicorn service.main:app --reload --port 8080
 pytest
 ```
 
+For the plan assistant, set `WATSONX_API_KEY` and `WATSONX_PROJECT_ID` in the
+repository root `.env.local` (or in the service environment). The service loads
+that file at startup. Restart the API after changing credentials. The frontend
+also needs `VITE_API_BASE_URL=http://localhost:8080` in `.env.local`; restart
+Vite after changing it. A response marked `source: "fallback"` means the plan
+service responded but watsonx was unavailable. Check the API log for the cause.
+Copy the project ID and API base URL from your watsonx project's **Developer
+access** page. Set `WATSONX_REGION` to the region prefix in that URL (for
+example, `eu-de` for `https://eu-de.ml.cloud.ibm.com`). If IBM denies access,
+confirm the API key belongs to a user or service ID with access to the project.
+The default model is `ibm/granite-4-h-small`; set `WATSONX_MODEL_ID` only to
+select another model listed as available in your IBM region.
+
 ## API endpoints
 
 | Endpoint | Description |

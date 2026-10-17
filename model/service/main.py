@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,6 +25,11 @@ import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ValidationError
+from dotenv import load_dotenv
+
+# Vite reads the repository's .env.local, but the Python service does not.
+# Load it for local development while preserving variables supplied by the host.
+load_dotenv(Path(__file__).resolve().parents[2] / ".env.local", override=False)
 
 # Allow running from model/ directory
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -83,6 +89,8 @@ class PlanForecast(BaseModel):
     reasons: list[str] = []
 
 class PlanRequest(BaseModel):
+    message: str
+    history: list[dict[str, str]] = []
     resident: PlanResident
     forecast: PlanForecast
     runwayHoursAtFullCharge: float | None = None
@@ -98,8 +106,14 @@ class PlanItem(BaseModel):
     reason_en: str
 
 class PlanResponse(BaseModel):
+    reply: str
     items: list[PlanItem]
     source: Literal["llm", "fallback"] = "llm"
+    fallback_reason: Literal["missing_credentials", "project_unavailable", "runtime_unavailable", "model_unavailable", "access_denied", "watsonx_error"] | None = None
+
+
+class WatsonxConfigurationError(ValueError):
+    """Required watsonx credentials are missing."""
 
 
 # ---------------------------------------------------------------------------
@@ -107,19 +121,28 @@ class PlanResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 _SYSTEM_PROMPT = """\
-You write short, practical power-outage preparation plans for one specific household.
-Use only the facts provided. Do not give medical treatment advice, dosing or diagnosis.
-Focus on preparation actions: charging, backups, food and medicine storage, staying cool or warm,
-communication with family, and where to go.
-If the backup battery covers fewer hours than the expected outage, say clearly that they need a second
-power source or a place to go, and include that as an item.
-Write in plain language at about a 6th-grade reading level.
-Return only JSON matching the schema. 4 to 6 items.
-Write the "title" and "reason" fields in the resident's language code given in the input,
-and also return an English copy in "title_en" and "reason_en".
+You are a household power-outage planning assistant. Respond to the resident's latest message.
+Use the resident profile and forecast as background, but focus on what they just asked or told you.
+Do not repeat unrelated actions from the profile. Do not invent facts, prices, battery run times,
+nearby facilities, or outage predictions. Do not give medical treatment advice, dosing or diagnosis;
+for device or medicine storage specifics, direct the resident to their supplier or pharmacist.
+For an insulin fridge, suggest reviewing the medicine's storage instructions and asking a pharmacist
+about backup cooling. Do not assume a safe storage duration or temperature, suggest moving an
+appliance to a public facility, or promise that a battery or cooler will keep medicine safe.
+Write a brief, direct "reply" in plain language, without a greeting or salutation. Answer the
+latest message with a useful next step when possible. If the message is outside power-outage planning,
+briefly explain what you can help with. Suggest 0 to 3 new plan items only when useful for the
+latest message; an empty items array is valid. If a backup battery is known to cover fewer hours
+than the expected outage, include a second power source or place to go when relevant.
+Return only JSON matching the schema. Write "reply", "title" and "reason" in the resident's
+language code, and provide English copies of item titles and reasons.
+When the language code is "en", every string in the response must be in English.
+Make every plan item title an action the resident can take, starting with a verb. Do not put a
+number, duration, price, or place in a plan item unless it was given in the latest message or forecast.
 
 Schema:
 {
+  "reply": "string",
   "items": [
     {
       "title": "string",
@@ -133,13 +156,24 @@ Schema:
 """
 
 
-def _build_fallback(req: PlanRequest) -> PlanResponse:
-    """Build a plan from static templates when the LLM is unavailable."""
+def _build_fallback(
+    req: PlanRequest,
+    reason: Literal["missing_credentials", "project_unavailable", "runtime_unavailable", "model_unavailable", "access_denied", "watsonx_error"],
+) -> PlanResponse:
+    """Offer only templates relevant to the latest message when the LLM is unavailable."""
     templates: dict = json.loads((FIXTURES_DIR / "plan_templates.json").read_text())
     items: list[PlanItem] = []
-
-    for device in req.resident.devices:
-        device_key = device.replace("-", "_")
+    message = req.message.lower()
+    topics = {
+        "insulin_fridge": ("insulin",),
+        "oxygen_concentrator": ("oxygen", "concentrator"),
+        "cpap": ("cpap",),
+        "home_dialysis": ("dialysis",),
+        "power_wheelchair": ("wheelchair",),
+    }
+    for device_key, keywords in topics.items():
+        if not any(word in message for word in keywords):
+            continue
         for t in templates.get(device_key, []):
             items.append(PlanItem(
                 title=t["title"], title_en=t["title"],
@@ -147,18 +181,44 @@ def _build_fallback(req: PlanRequest) -> PlanResponse:
                 reason=t["reason"], reason_en=t["reason"],
             ))
 
-    # Always add general items (phone, flashlight, never-use-generator)
-    for t in templates.get("general", []):
-        title = t["title"].replace("{contact}", "your family contact").replace(
-            "{coolPlace}", req.nearestCoolPlace or "your nearest community center"
-        )
-        items.append(PlanItem(
-            title=title, title_en=title,
-            when=t.get("when", "night_before"),
-            reason=t["reason"], reason_en=t["reason"],
-        ))
+    if not items and any(word in message for word in ("outage", "prepare", "power", "plan")):
+        for t in templates.get("general", [])[:2]:
+            items.append(PlanItem(
+                title=t["title"], title_en=t["title"],
+                when=t.get("when", "night_before"),
+                reason=t["reason"], reason_en=t["reason"],
+            ))
 
-    return PlanResponse(items=items[:6], source="fallback")
+    reply = (
+        "I can't answer that personally while watsonx is unavailable. "
+        "These are general preparation steps for what you mentioned."
+        if items else
+        "I can't answer that personally while watsonx is unavailable. "
+        "Please try again when the service is connected."
+    )
+    return PlanResponse(reply=reply, items=items[:3], source="fallback", fallback_reason=reason)
+
+
+def _filter_generated_items(req: PlanRequest, items: list[PlanItem]) -> list[PlanItem]:
+    """Discard plan claims with unsupported quantities or unsafe insulin destinations."""
+    allowed_numbers = set(re.findall(r"\d+(?:\.\d+)?", req.message))
+    for value in (
+        req.forecast.durationLowHours,
+        req.forecast.durationHighHours,
+        req.runwayHoursAtFullCharge,
+    ):
+        if value is not None:
+            allowed_numbers.add(str(value).removesuffix(".0"))
+
+    filtered: list[PlanItem] = []
+    for item in items:
+        copy = " ".join((item.title, item.title_en, item.reason, item.reason_en))
+        if set(re.findall(r"\d+(?:\.\d+)?", copy)) - allowed_numbers:
+            continue
+        if "insulin" in req.message.lower() and re.search(r"cooling center|public facilit", copy, re.I):
+            continue
+        filtered.append(item)
+    return filtered[:3]
 
 
 async def _call_watsonx(req: PlanRequest) -> PlanResponse:
@@ -166,10 +226,10 @@ async def _call_watsonx(req: PlanRequest) -> PlanResponse:
     api_key = os.getenv("WATSONX_API_KEY", "")
     project_id = os.getenv("WATSONX_PROJECT_ID", "")
     region = os.getenv("WATSONX_REGION", "us-south")
-    model_id = os.getenv("WATSONX_MODEL_ID", "ibm/granite-3-3-8b-instruct")
+    model_id = os.getenv("WATSONX_MODEL_ID", "ibm/granite-4-h-small")
 
     if not api_key or not project_id:
-        raise ValueError("WATSONX_API_KEY and WATSONX_PROJECT_ID must be set")
+        raise WatsonxConfigurationError("WATSONX_API_KEY and WATSONX_PROJECT_ID must be set")
 
     # Obtain IAM token
     iam_url = "https://iam.cloud.ibm.com/identity/token"
@@ -183,6 +243,8 @@ async def _call_watsonx(req: PlanRequest) -> PlanResponse:
         iam_token = token_resp.json()["access_token"]
 
         user_message = json.dumps({
+            "latest_message": req.message,
+            "recent_conversation": req.history[-6:],
             "resident": req.resident.model_dump(),
             "forecast": req.forecast.model_dump(),
             "runwayHoursAtFullCharge": req.runwayHoursAtFullCharge,
@@ -200,7 +262,7 @@ async def _call_watsonx(req: PlanRequest) -> PlanResponse:
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": user_message},
             ],
-            "parameters": {"max_new_tokens": 1024, "temperature": 0.2},
+            "parameters": {"max_new_tokens": 1024, "temperature": 0},
         }
         wx_resp = await client.post(
             wx_url,
@@ -219,7 +281,9 @@ async def _call_watsonx(req: PlanRequest) -> PlanResponse:
             raw_text = raw_text[4:]
 
     parsed = json.loads(raw_text)
-    return PlanResponse(**parsed, source="llm")
+    response = PlanResponse(**parsed, source="llm")
+    response.items = _filter_generated_items(req, response.items)
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -343,10 +407,27 @@ async def post_plan(req: PlanRequest) -> PlanResponse:
     """
     try:
         return await _call_watsonx(req)
-    except (ValueError, KeyError):
-        # Credentials not configured — silent fallback
+    except WatsonxConfigurationError:
         logger.info("watsonx credentials not set; using fallback templates")
-    except (httpx.HTTPError, json.JSONDecodeError, ValidationError) as exc:
+        reason = "missing_credentials"
+    except httpx.HTTPStatusError as exc:
         logger.warning("watsonx call failed (%s); using fallback templates", exc)
+        try:
+            error_code = exc.response.json().get("errors", [{}])[0].get("code")
+        except (ValueError, IndexError, KeyError, TypeError):
+            error_code = None
+        if error_code == "no_associated_service_instance_error":
+            reason = "runtime_unavailable"
+        elif error_code == "model_not_supported":
+            reason = "model_unavailable"
+        elif exc.response.status_code == 404:
+            reason = "project_unavailable"
+        elif exc.response.status_code in (401, 403):
+            reason = "access_denied"
+        else:
+            reason = "watsonx_error"
+    except (httpx.HTTPError, ValueError, KeyError, ValidationError) as exc:
+        logger.warning("watsonx call failed (%s); using fallback templates", exc)
+        reason = "watsonx_error"
 
-    return _build_fallback(req)
+    return _build_fallback(req, reason)

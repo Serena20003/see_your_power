@@ -279,11 +279,15 @@ export interface ApiPlanItem {
 }
 
 export interface ApiPlanResponse {
+  reply: string;
   items: ApiPlanItem[];
   source: "llm" | "fallback";
+  fallback_reason?: "missing_credentials" | "project_unavailable" | "runtime_unavailable" | "model_unavailable" | "access_denied" | "watsonx_error" | null;
 }
 
 export interface PlanRequestPayload {
+  message: string;
+  history?: { role: "assistant" | "user"; text: string }[];
   resident: {
     name: string;
     age?: number;
