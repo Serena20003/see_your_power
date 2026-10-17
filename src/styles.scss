@@ -319,7 +319,7 @@ button { cursor: pointer; }
 }
 
 /* =========================================================================
-   County Risk Map — Leaflet / OpenStreetMap
+   County Risk Map — MapTiler geographic layers
    ========================================================================= */
 
 .risk-map-wrap { margin-bottom: 24px; }
@@ -328,15 +328,21 @@ button { cursor: pointer; }
 
 .risk-map-canvas { border: 1px solid #e0e0e0; overflow: hidden; }
 
-/* Leaflet tooltip content */
-.risk-map-tt { display: flex; flex-direction: column; gap: 3px; font-family: 'IBM Plex Sans', sans-serif; }
-.risk-map-tt strong { font-size: 13px; font-weight: 600; color: #161616; }
-.risk-map-tt span { font-size: 14px; }
-.risk-map-tt em { font-style: normal; font-size: 11px; color: #525252; max-width: 200px; }
+/* MapTiler SDK overrides */
+.maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib a { font-size: 9px !important; }
+.maplibregl-ctrl-bottom-right { bottom: 44px; }
 
-/* Leaflet overrides — sharp, on-brand */
-.leaflet-tooltip { padding: 8px 12px; border: none; box-shadow: 0 2px 8px #0000001f; border-radius: 0; }
-.leaflet-container { font-family: 'IBM Plex Sans', sans-serif; }
+/* No-API-key notice */
+.risk-map-key-notice {
+  padding: 10px 16px;
+  background: #fff8e1;
+  border-bottom: 1px solid #f1c21b;
+  color: #6b4e00;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.risk-map-key-notice code { background: #ffefc4; padding: 1px 4px; font-size: 11px; }
+.risk-map-key-notice a { color: #0f62fe; }
 
 .risk-map-legend {
   display: flex;

@@ -66,6 +66,8 @@ interface DemoCounty {
 const DEMO_COUNTIES: Record<string, DemoCounty> = {
   "06037": { name: "Los Angeles", state: "CA", gustMph: 48, tempF: 88, soilMoisture: 0.08, treeCoverPct: 18, overheadLineShare: 0.55, pastOutages3yr: 4, medianOutageHours: 5.5, alerts: ["High Wind Warning"] },
   "06059": { name: "Orange", state: "CA", gustMph: 36, tempF: 85, soilMoisture: 0.07, treeCoverPct: 12, overheadLineShare: 0.48, pastOutages3yr: 2, medianOutageHours: 4.0, alerts: [] },
+  "06065": { name: "Riverside", state: "CA", gustMph: 42, tempF: 94, soilMoisture: 0.06, treeCoverPct: 10, overheadLineShare: 0.60, pastOutages3yr: 6, medianOutageHours: 7.0, alerts: [] },
+  "06071": { name: "San Bernardino", state: "CA", gustMph: 44, tempF: 91, soilMoisture: 0.05, treeCoverPct: 9, overheadLineShare: 0.62, pastOutages3yr: 7, medianOutageHours: 8.0, alerts: [] },
   "06073": { name: "San Diego", state: "CA", gustMph: 31, tempF: 82, soilMoisture: 0.06, treeCoverPct: 14, overheadLineShare: 0.45, pastOutages3yr: 3, medianOutageHours: 4.5, alerts: [] },
   "06085": { name: "Santa Clara", state: "CA", gustMph: 22, tempF: 78, soilMoisture: 0.15, treeCoverPct: 28, overheadLineShare: 0.40, pastOutages3yr: 5, medianOutageHours: 6.0, alerts: [] },
   "36061": { name: "New York", state: "NY", gustMph: 18, tempF: 68, soilMoisture: 0.20, treeCoverPct: 22, overheadLineShare: 0.20, pastOutages3yr: 2, medianOutageHours: 3.5, alerts: [] },

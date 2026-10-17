@@ -12,6 +12,8 @@ import { fetchCoverage } from "./api";
 const DEMO_COUNTIES: { fips: string; label: string }[] = [
   { fips: "06037", label: "Los Angeles County, CA" },
   { fips: "06059", label: "Orange County, CA" },
+  { fips: "06065", label: "Riverside County, CA" },
+  { fips: "06071", label: "San Bernardino County, CA" },
   { fips: "06073", label: "San Diego County, CA" },
   { fips: "06085", label: "Santa Clara County, CA" },
   { fips: "36061", label: "New York County, NY" },

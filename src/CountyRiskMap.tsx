@@ -1,86 +1,59 @@
-/**
- * CountyRiskMap — Interactive Leaflet map with OpenStreetMap tiles.
- *
- * Shows a circle marker for each covered county, colored and sized by
- * outage probability for the active forecast window.
- * Clicking a marker switches the main forecast panel to that county.
- */
+/** County forecast points live in the map's geographic coordinate system. */
 import { useEffect, useRef, useState } from "react";
-import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } from "react-leaflet";
-import type { Map as LeafletMap } from "leaflet";
-import "leaflet/dist/leaflet.css";
+import * as maptilersdk from "@maptiler/sdk";
+import type { FeatureCollection, Point } from "geojson";
+import "@maptiler/sdk/dist/maptiler-sdk.css";
 import type { CountyForecast } from "./types";
-import { buildDemoForecast } from "./api";
+import { buildDemoForecast, fetchForecast } from "./api";
 
-// ---------------------------------------------------------------------------
-// County metadata
-// ---------------------------------------------------------------------------
-
-const COUNTY_META: Record<string, { name: string; state: string; lat: number; lon: number }> = {
-  "06037": { name: "Los Angeles",    state: "CA", lat: 34.05, lon: -118.24 },
-  "06059": { name: "Orange",         state: "CA", lat: 33.72, lon: -117.83 },
-  "06073": { name: "San Diego",      state: "CA", lat: 32.72, lon: -117.15 },
-  "06065": { name: "Riverside",      state: "CA", lat: 33.95, lon: -117.40 },
-  "06071": { name: "San Bernardino", state: "CA", lat: 34.04, lon: -117.29 },
-  "06085": { name: "Santa Clara",    state: "CA", lat: 37.35, lon: -121.96 },
-  "36061": { name: "New York",       state: "NY", lat: 40.71, lon: -74.01  },
-  "48201": { name: "Harris",         state: "TX", lat: 29.76, lon: -95.37  },
-  "17031": { name: "Cook",           state: "IL", lat: 41.88, lon: -87.63  },
-  "53033": { name: "King",           state: "WA", lat: 47.61, lon: -122.33 },
-  "12086": { name: "Miami-Dade",     state: "FL", lat: 25.77, lon: -80.19  },
-  "04013": { name: "Maricopa",       state: "AZ", lat: 33.45, lon: -112.07 },
+const COUNTIES: Record<string, { name: string; lat: number; lon: number }> = {
+  "06037": { name: "Los Angeles", lat: 34.052, lon: -118.244 },
+  "06059": { name: "Orange", lat: 33.717, lon: -117.831 },
+  "06073": { name: "San Diego", lat: 32.716, lon: -117.163 },
+  "06065": { name: "Riverside", lat: 33.82, lon: -116.55 },
+  "06071": { name: "San Bernardino", lat: 34.65, lon: -116.65 },
+  "06085": { name: "Santa Clara", lat: 37.335, lon: -121.893 },
+  "36061": { name: "New York", lat: 40.713, lon: -74.006 },
+  "48201": { name: "Harris", lat: 29.763, lon: -95.363 },
+  "17031": { name: "Cook", lat: 41.883, lon: -87.632 },
+  "53033": { name: "King", lat: 47.601, lon: -122.332 },
+  "12086": { name: "Miami-Dade", lat: 25.774, lon: -80.198 },
+  "04013": { name: "Maricopa", lat: 33.448, lon: -112.074 },
 };
-
-const FIPS_LIST = Object.keys(COUNTY_META);
-
-// ---------------------------------------------------------------------------
-// Color + radius scale
-// ---------------------------------------------------------------------------
-
-function probColor(p: number | null): string {
-  if (p === null) return "#a8a8a8";
-  if (p < 0.35)   return "#24a148"; // green
-  if (p < 0.60)   return "#f1c21b"; // amber
-  if (p < 0.80)   return "#ff832b"; // orange
-  return "#da1e28";                  // red
-}
-
-function probRadius(p: number | null, isActive: boolean): number {
-  const base = p === null ? 10 : 10 + Math.round(p * 14);
-  return isActive ? base + 5 : base;
-}
-
-function probLabel(p: number | null): string {
-  return p === null ? "—" : `${Math.round(p * 100)}%`;
-}
-
-// ---------------------------------------------------------------------------
-// Sub-component: fly to active county when fips changes
-// ---------------------------------------------------------------------------
-
-function FlyTo({ fips }: { fips: string }) {
-  const map = useMap();
-  const mounted = useRef(false);
-  useEffect(() => {
-    // Skip the first render — let the MapContainer center prop handle initial position.
-    // Only fly when the user actively changes county.
-    if (!mounted.current) {
-      mounted.current = true;
-      return;
-    }
-    const meta = COUNTY_META[fips];
-    if (meta) {
-      map.flyTo([meta.lat, meta.lon], Math.max(map.getZoom(), 7), { duration: 0.8 });
-    }
-  }, [fips, map]);
-  return null;
-}
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
+const FIPS_LIST = Object.keys(COUNTIES);
+const SOURCE = "county-risk";
+const CLICK_LAYERS = ["county-risk-dots", "county-risk-values", "county-risk-names"];
 type WindowKey = "next_24h" | "next_24_48h" | "next_48_72h";
+
+function color(p: number | null): string {
+  if (p === null) return "#8d8d8d";
+  if (p < 0.35) return "#198038";
+  if (p < 0.60) return "#b28600";
+  if (p < 0.80) return "#da6300";
+  return "#a2191f";
+}
+
+function points(forecasts: Record<string, CountyForecast>, activeFips: string, window: WindowKey): FeatureCollection<Point> {
+  return {
+    type: "FeatureCollection",
+    features: FIPS_LIST.map((fips) => {
+      const county = COUNTIES[fips];
+      const p = forecasts[fips]?.[window]?.probability ?? null;
+      return {
+        type: "Feature",
+        id: fips,
+        geometry: { type: "Point", coordinates: [county.lon, county.lat] },
+        properties: {
+          fips, name: county.name,
+          value: p === null ? "—" : `${Math.round(p * 100)}%`,
+          color: color(p),
+          radius: p === null ? 17 : 16 + Math.round(p * 7),
+          active: fips === activeFips,
+        },
+      };
+    }),
+  };
+}
 
 interface Props {
   activeFips: string;
@@ -89,124 +62,134 @@ interface Props {
   activeForecast: CountyForecast | null;
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 export default function CountyRiskMap({ activeFips, activeWindow, onSelectFips, activeForecast }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<maptilersdk.Map | null>(null);
+  const latest = useRef({ activeFips, activeWindow, onSelectFips, forecasts: {} as Record<string, CountyForecast> });
+  const previousFips = useRef(activeFips);
   const [forecasts, setForecasts] = useState<Record<string, CountyForecast>>({});
-  const mapRef = useRef<LeafletMap | null>(null);
+  const apiKey = (import.meta.env.VITE_MAPTILER_API_KEY as string | undefined) || "";
+  latest.current = { activeFips, activeWindow, onSelectFips, forecasts };
 
-  // Load all county forecasts on mount
   useEffect(() => {
     let cancelled = false;
-    Promise.all(
-      FIPS_LIST.map(async (fips) => {
-        try {
-          const { fetchForecast } = await import("./api");
-          const result = await fetchForecast(fips);
-          if (result.phase === "success" || result.phase === "stale") {
-            return [fips, result.data] as const;
-          }
-        } catch { /* ignore */ }
-        return [fips, buildDemoForecast(fips)] as const;
-      })
-    ).then((entries) => {
+    Promise.all(FIPS_LIST.map(async (fips) => {
+      try {
+        const result = await fetchForecast(fips);
+        if (result.phase === "success" || result.phase === "stale") return [fips, result.data] as const;
+      } catch { /* Local demo fallback. */ }
+      return [fips, buildDemoForecast(fips)] as const;
+    })).then((entries) => {
       if (!cancelled) setForecasts(Object.fromEntries(entries));
     });
     return () => { cancelled = true; };
   }, []);
 
-  // Keep active county in sync with parent
   useEffect(() => {
-    if (activeForecast) {
-      setForecasts((prev) => ({ ...prev, [activeFips]: activeForecast }));
-    }
+    if (activeForecast) setForecasts((prev) => ({ ...prev, [activeFips]: activeForecast }));
   }, [activeFips, activeForecast]);
 
-  const windowLabel =
-    activeWindow === "next_24h" ? "NEXT 24H" :
-    activeWindow === "next_24_48h" ? "24–48H" : "48–72H";
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
+    if (apiKey) maptilersdk.config.apiKey = apiKey;
+    const initial = COUNTIES[latest.current.activeFips] ?? COUNTIES["06037"];
+    const map = new maptilersdk.Map({
+      container: containerRef.current,
+      style: "streets-v2",
+      center: initial === COUNTIES["06037"] ? [-117.6, 33.9] : [initial.lon, initial.lat],
+      zoom: 6.6,
+      navigationControl: "bottom-right" as unknown as boolean,
+      attributionControl: { compact: true },
+    });
+    mapRef.current = map;
 
+    map.once("load", () => {
+      const current = latest.current;
+      map.addSource(SOURCE, { type: "geojson", data: points(current.forecasts, current.activeFips, current.activeWindow) });
+      map.addLayer({
+        id: "county-risk-halo", type: "circle", source: SOURCE,
+        paint: {
+          "circle-radius": ["+", ["get", "radius"], 5],
+          "circle-color": "#161616",
+          "circle-opacity": ["case", ["get", "active"], 0.9, 0],
+        },
+      });
+      map.addLayer({
+        id: "county-risk-dots", type: "circle", source: SOURCE,
+        paint: {
+          "circle-radius": ["get", "radius"],
+          "circle-color": ["get", "color"],
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 2,
+        },
+      });
+      map.addLayer({
+        id: "county-risk-values", type: "symbol", source: SOURCE,
+        layout: {
+          "text-field": ["get", "value"],
+          "text-size": 12,
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
+        },
+        paint: { "text-color": "#ffffff" },
+      });
+      map.addLayer({
+        id: "county-risk-names", type: "symbol", source: SOURCE,
+        layout: {
+          "text-field": ["get", "name"],
+          "text-size": 11,
+          "text-offset": [0, 2.7],
+          "text-anchor": "top",
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
+        },
+        paint: { "text-color": "#161616", "text-halo-color": "#ffffff", "text-halo-width": 2 },
+      });
+      map.on("click", (event) => {
+        const hit = map.queryRenderedFeatures(event.point, { layers: CLICK_LAYERS })[0];
+        const fips = hit?.properties?.fips as string | undefined;
+        if (fips && COUNTIES[fips]) latest.current.onSelectFips(fips);
+      });
+      CLICK_LAYERS.forEach((layer) => {
+        map.on("mouseenter", layer, () => { map.getCanvas().style.cursor = "pointer"; });
+        map.on("mouseleave", layer, () => { map.getCanvas().style.cursor = ""; });
+      });
+    });
+    return () => { map.remove(); mapRef.current = null; };
+  }, [apiKey]);
+
+  useEffect(() => {
+    const source = mapRef.current?.getSource(SOURCE) as maptilersdk.GeoJSONSource | undefined;
+    source?.setData(points(forecasts, activeFips, activeWindow));
+  }, [forecasts, activeFips, activeWindow]);
+
+  useEffect(() => {
+    if (previousFips.current === activeFips) return;
+    previousFips.current = activeFips;
+    const county = COUNTIES[activeFips];
+    const map = mapRef.current;
+    if (county && map) map.flyTo({ center: [county.lon, county.lat], zoom: Math.max(map.getZoom(), 6.6), duration: 700 });
+  }, [activeFips]);
+
+  const windowLabel = activeWindow === "next_24h" ? "NEXT 24H" : activeWindow === "next_24_48h" ? "24–48H" : "48–72H";
   return (
     <div className="risk-map-wrap">
       <div className="risk-map-header">
         <span className="section-kicker">COUNTY RISK MAP · {windowLabel}</span>
         <p>Outage probability by county — click any marker to switch the forecast view.</p>
       </div>
-
       <div className="risk-map-canvas">
-        <MapContainer
-          center={[38.5, -98]}
-          zoom={4}
-          scrollWheelZoom={true}
-          style={{ height: "420px", width: "100%" }}
-          ref={mapRef}
-        >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-
-          <FlyTo fips={activeFips} />
-
-          {FIPS_LIST.map((fips) => {
-            const meta = COUNTY_META[fips];
-            const fc = forecasts[fips];
-            const prob = fc ? (fc[activeWindow]?.probability ?? null) : null;
-            const isActive = fips === activeFips;
-            const color = probColor(prob);
-            const radius = probRadius(prob, isActive);
-
-            return (
-              <CircleMarker
-                key={fips}
-                center={[meta.lat, meta.lon]}
-                radius={radius}
-                pathOptions={{
-                  fillColor: color,
-                  fillOpacity: isActive ? 1.0 : 0.82,
-                  color: isActive ? "#161616" : "#fff",
-                  weight: isActive ? 3 : 1.5,
-                }}
-                eventHandlers={{
-                  click: () => onSelectFips(fips),
-                }}
-              >
-                <Tooltip
-                  permanent={false}
-                  direction="top"
-                  offset={[0, -radius]}
-                  opacity={0.95}
-                >
-                  <div className="risk-map-tt">
-                    <strong>{meta.name}, {meta.state}</strong>
-                    <span style={{ color, fontWeight: 700 }}>{probLabel(prob)}</span>
-                    {fc?.next_24h.reasons[0] && (
-                      <em>{fc[activeWindow].reasons[0]}</em>
-                    )}
-                  </div>
-                </Tooltip>
-              </CircleMarker>
-            );
-          })}
-        </MapContainer>
-
-        {/* Legend */}
+        {!apiKey && <div className="risk-map-key-notice">Add <code>VITE_MAPTILER_API_KEY=your_key</code> to <code>.env.local</code> for the MapTiler basemap. Get a free key at <a href="https://www.maptiler.com/cloud/" target="_blank" rel="noreferrer">maptiler.com/cloud</a>.</div>}
+        <div ref={containerRef} style={{ height: "440px", width: "100%" }} />
         <div className="risk-map-legend">
           <span className="section-kicker">RISK</span>
           {[
-            { label: "Low < 35%",    color: "#24a148" },
-            { label: "Mod 35–60%",   color: "#f1c21b" },
-            { label: "High 60–80%",  color: "#ff832b" },
-            { label: "Severe > 80%", color: "#da1e28" },
-          ].map(({ label, color }) => (
-            <span key={label} className="risk-legend-item">
-              <span className="risk-legend-dot" style={{ background: color }} />
-              {label}
-            </span>
-          ))}
-          <span className="risk-legend-note">Larger circle = higher risk</span>
+            { label: "Low < 35%", color: "#198038" },
+            { label: "Mod 35–60%", color: "#b28600" },
+            { label: "High 60–80%", color: "#da6300" },
+            { label: "Severe > 80%", color: "#a2191f" },
+          ].map(({ label, color }) => <span key={label} className="risk-legend-item"><span className="risk-legend-dot" style={{ background: color }} />{label}</span>)}
+          <span className="risk-legend-note">Larger = higher risk · Click to select</span>
         </div>
       </div>
     </div>
