@@ -1,0 +1,34 @@
+[
+  {
+    "fips": "06037",
+    "name": "Los Angeles",
+    "state": "CA",
+    "lat": 34.052235,
+    "lon": -118.243683,
+    "tree_cover_pct": 18.0,
+    "overhead_line_share": 0.55,
+    "terrain_roughness": 0.28,
+    "fire_zone": "tier2",
+    "past_unplanned_outages_3yr": 4,
+    "median_unplanned_hours": 5.5,
+    "canopy_available": true,
+    "terrain_available": true,
+    "has_local_labels": false
+  },
+  {
+    "fips": "06059",
+    "name": "Orange",
+    "state": "CA",
+    "lat": 33.720219,
+    "lon": -117.830774,
+    "tree_cover_pct": 12.0,
+    "overhead_line_share": 0.48,
+    "terrain_roughness": 0.22,
+    "fire_zone": "tier2",
+    "past_unplanned_outages_3yr": 2,
+    "median_unplanned_hours": 4.0,
+    "canopy_available": true,
+    "terrain_available": true,
+    "has_local_labels": false
+  }
+]

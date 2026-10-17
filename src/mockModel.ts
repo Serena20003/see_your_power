@@ -1,27 +1,6 @@
-export type Layer = "outage" | "wind" | "heat" | "price";
 export type ProfileKey = "oxygen" | "insulin" | "ev" | "laundry" | "food" | "family" | "costAware";
 export type Profile = Record<ProfileKey, boolean>;
 export type PlanItem = { id: string; when: string; title: string; why: string; category: "essential" | "home" | "savings" };
-
-function dateLabel(daysAhead: number) {
-  const date = new Date();
-  date.setDate(date.getDate() + daysAhead);
-  return new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric" }).format(date);
-}
-
-// Static stand-in for a future validated forecast response. No network calls.
-export const days = [
-  { label: "Today", short: "Today", date: dateLabel(0), probability: 18, gust: 12, temp: 74, price: "Lower after 9 PM", window: "No particular window", duration: "—", note: "Conditions look fairly steady today." },
-  { label: "Tomorrow", short: "Tomorrow", date: dateLabel(1), probability: 34, gust: 27, temp: 80, price: "Higher 4–9 PM", window: "Tomorrow · 4–8 PM", duration: "2–4 hours", note: "Wind picks up in the afternoon." },
-  { label: "In 2 days", short: "In 2 days", date: dateLabel(2), probability: 68, gust: 44, temp: 88, price: "Higher 4–9 PM", window: "In 2 days · 2–6 PM", duration: "4–8 hours", note: "Strong wind is the main example signal." },
-] as const;
-
-export const layers: { id: Layer; label: string; unit: string; range: string }[] = [
-  { id: "outage", label: "Power outlook", unit: "outage chance", range: "Lower → Higher" },
-  { id: "wind", label: "Wind", unit: "peak gust", range: "Calm → Windy" },
-  { id: "heat", label: "Heat", unit: "high temperature", range: "Mild → Hot" },
-  { id: "price", label: "Energy cost", unit: "sample rate period", range: "Lower → Higher" },
-];
 
 export const initialProfile: Profile = { oxygen: true, insulin: false, ev: false, laundry: true, food: true, family: true, costAware: true };
 export const profileChoices: { key: ProfileKey; title: string; detail: string }[] = [

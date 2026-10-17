@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { Button, Checkbox, Tag, Theme, Tile } from "@carbon/react";
-import { ArrowRight, Chat, Flash, Location, Send, SettingsAdjust } from "@carbon/icons-react";
-import MapScene from "./MapScene";
-import { createPlan, days, initialProfile, layers, profileChoices, type Layer, type PlanItem, type Profile, type ProfileKey } from "./mockModel";
+import { ArrowRight, Chat, Flash, Send, SettingsAdjust } from "@carbon/icons-react";
+import ForecastPanel from "./ForecastPanel";
+import { createPlan, initialProfile, profileChoices, type PlanItem, type Profile, type ProfileKey } from "./mockModel";
 
 type ChatMessage = { role: "assistant" | "user"; text: string };
 type FactSource = "sample" | "interview" | "chat" | "edited";
@@ -29,27 +29,12 @@ function InterviewPanel({ profile, onComplete }: { profile: Profile; onComplete:
   </Tile>;
 }
 
-function MapPanel({ dayIndex, setDayIndex, layer, setLayer, profile, interviewActive, onCompleteInterview }: { dayIndex: number; setDayIndex: (value: number) => void; layer: Layer; setLayer: (value: Layer) => void; profile: Profile; interviewActive: boolean; onCompleteInterview: (profile: Profile | null) => void }) {
-  const [zoom, setZoom] = useState(1);
-  const forecast = days[dayIndex];
-  const currentLayer = layers.find((item) => item.id === layer)!;
-  const value = { outage: `${forecast.probability}%`, wind: `${forecast.gust} mph`, heat: `${forecast.temp}°F`, price: forecast.price }[layer];
-  return <section className="map-section" aria-labelledby="map-title">
-    <div className="map-heading"><div><span className="section-kicker">SOUTH BAY · EXAMPLE LOCATION</span><h1 id="map-title">Your power forecast</h1><p>Explore the outlook for your area, just as you would check the weather.</p></div><Tag type="blue" size="sm">Illustrative data</Tag></div>
-    <div className="day-tabs" role="group" aria-label="Forecast day">{days.map((day, index) => <button type="button" className={index === dayIndex ? "selected" : ""} aria-pressed={index === dayIndex} onClick={() => setDayIndex(index)} key={day.label}><span>{day.short}</span><strong>{day.date}</strong><span>{day.probability}% example outage chance</span></button>)}</div>
-    <div className="map-layout"><Tile className="map-card"><div className="map-canvas"><div className="map-zoomed" style={{ transform: `scale(${zoom})` }}><MapScene layer={layer} probability={forecast.probability} /></div><div className="map-float"><Location size={16} /><div><strong>Torrance, CA</strong><span>Sample location · map not to scale</span></div></div><div className="map-zoom-controls" role="group" aria-label="Map zoom"><button type="button" aria-label="Zoom in" disabled={zoom >= 1.5} onClick={() => setZoom((value) => Math.min(1.5, value + .25))}>+</button><button type="button" aria-label="Zoom out" disabled={zoom <= 1} onClick={() => setZoom((value) => Math.max(1, value - .25))}>−</button></div><div className="map-layer-value"><span>{currentLayer.label}</span><strong>{value}</strong><small>{currentLayer.unit}</small></div></div><div className="map-legend"><span>ILLUSTRATIVE {currentLayer.label.toUpperCase()} LAYER</span><div className={`legend-gradient legend-${layer}`} /><span>{currentLayer.range}</span></div></Tile>
-      {interviewActive ? <InterviewPanel profile={profile} onComplete={onCompleteInterview} /> : <Tile className="outlook-card" role="region" aria-labelledby="area-title"><div className="panel-topline"><span className="section-kicker">YOUR AREA</span><Tag type={forecast.probability >= 50 ? "warm-gray" : "teal"} size="sm">{forecast.probability >= 50 ? "Plan ahead" : "Watchful"}</Tag></div><h2 id="area-title">{forecast.probability}%</h2><p className="outlook-label">example chance of an outage</p><p className="outlook-note">{forecast.note}</p><div className="outlook-rows"><div><span>Most likely</span><strong>{forecast.window}</strong></div><div><span>Planning range</span><strong>{forecast.duration}</strong></div><div><span>Wind gust</span><strong>{forecast.gust} mph</strong></div><div><span>High temperature</span><strong>{forecast.temp}°F</strong></div></div><p className="outlook-disclaimer">Mock model output. These numbers are not a live or validated prediction.</p></Tile>}</div>
-    <div className="layer-row"><div><span className="section-kicker">MAP LAYERS</span><p>Choose a factor to explore</p></div><div className="layer-buttons" role="group" aria-label="Map layer">{layers.map((item) => <Button key={item.id} kind={layer === item.id ? "primary" : "tertiary"} size="sm" type="button" aria-pressed={layer === item.id} onClick={() => setLayer(item.id)}>{item.label}</Button>)}</div></div>
-    <details className="model-flow"><summary>How this forecast becomes your plan</summary><div><p><strong>Verified inputs</strong> would include weather forecasts, real outage history, local infrastructure, and your actual utility rate schedule.</p><ArrowRight size={18} aria-hidden="true" /><p><strong>Prediction model</strong> would return a validated outage chance, time window, duration range, and reasons for this area.</p><ArrowRight size={18} aria-hidden="true" /><p><strong>Your plan</strong> would combine that output with your reviewed household choices. The assistant could suggest updates with your consent.</p></div></details>
-  </section>;
-}
-
 function PlanAndSettingsPanel({ profile, sources, plan, checked, setChecked, onToggle, onRestartInterview }: { profile: Profile; sources: Sources; plan: PlanItem[]; checked: Record<string, boolean>; setChecked: (value: Record<string, boolean>) => void; onToggle: (key: ProfileKey) => void; onRestartInterview: () => void }) {
   const completed = plan.filter((item) => checked[item.id]).length;
   const sourceLabel: Record<FactSource, string> = { sample: "Sample answer", interview: "Starting questions", chat: "Added in chat", edited: "You corrected this" };
   return <Tile className="plan-card" role="region" aria-labelledby="plan-title">
     <div className="panel-topline"><span className="section-kicker">YOUR PLAN</span><Tag type="teal" size="sm">{completed} of {plan.length} done</Tag></div>
-    <h2 id="plan-title">Small steps, chosen for you.</h2><p className="panel-description">The selected day’s example forecast and the answers below shape this plan. Each step shows why it is here.</p>
+    <h2 id="plan-title">Small steps, chosen for you.</h2><p className="panel-description">The selected window's forecast and the answers below shape this plan. Each step shows why it is here.</p>
     <div className="plan-progress" role="progressbar" aria-label="Plan progress" aria-valuemin={0} aria-valuemax={plan.length} aria-valuenow={completed}><span style={{ width: `${completed / plan.length * 100}%` }} /></div>
     <div className="plan-list">{plan.map((item) => <div className={`plan-item ${checked[item.id] ? "is-done" : ""}`} key={item.id}><Checkbox id={`plan-${item.id}`} checked={!!checked[item.id]} onChange={() => setChecked({ ...checked, [item.id]: !checked[item.id] })} labelText={<span className="plan-copy"><span className="plan-meta">{item.when} <span aria-hidden="true">·</span> {item.category === "essential" ? "POWER & CARE" : item.category === "savings" ? "SAVINGS" : "HOME"}</span><strong>{item.title}</strong><span className="plan-why"><span>WHY THIS IS IN YOUR PLAN</span>{item.why}</span></span>} /></div>)}</div>
     <div className="plan-note"><Flash size={18} /><span>{profile.oxygen ? "Check the actual backup battery run time and device instructions before relying on it during an outage." : "This plan includes everyday preparation and can change as you update your answers."}</span></div>
@@ -85,17 +70,98 @@ function AssistantPanel({ profile, onSetProfile }: { profile: Profile; onSetProf
 }
 
 export default function App() {
-  const [dayIndex, setDayIndex] = useState(2);
-  const [layer, setLayer] = useState<Layer>("outage");
+  // County FIPS — default to Los Angeles for the demo
+  const [fips, setFips] = useState("06037");
+
+  // Personal plan state (unchanged from original)
   const [profile, setProfile] = useState<Profile>(initialProfile);
   const [sources, setSources] = useState<Sources>(() => Object.fromEntries(profileChoices.map((choice) => [choice.key, "sample"])) as Sources);
   const [interviewActive, setInterviewActive] = useState(true);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
-  const plan = useMemo(() => createPlan(profile, days[dayIndex].probability), [profile, dayIndex]);
+
+  // Plan is driven by profile only (the county forecast enriches it in the
+  // production /api/plan flow; for the demo mockModel.createPlan suffices).
+  const plan = useMemo(() => createPlan(profile, 50), [profile]);
+
   const toggleProfile = (key: ProfileKey) => { setProfile((current) => ({ ...current, [key]: !current[key] })); setSources((current) => ({ ...current, [key]: "edited" })); };
   const setProfileOn = (key: ProfileKey) => { setProfile((current) => ({ ...current, [key]: true })); setSources((current) => ({ ...current, [key]: "chat" })); };
   const completeInterview = (answer: Profile | null) => { if (answer) { setProfile(answer); setSources(Object.fromEntries(profileChoices.map((choice) => [choice.key, "interview"])) as Sources); } setInterviewActive(false); };
-  return <Theme theme="g10"><div className="site-shell"><header className="site-header"><div className="brand"><span className="brand-mark"><Flash size={20} /></span><span>runway<span className="brand-period">.</span></span></div><nav className="header-nav" aria-label="Page sections"><a href="#forecast">Forecast</a><a href="#plan">My plan</a><a href="#settings">Settings</a><a href="#assistant">Assistant</a></nav><div className="header-right"><a className="header-model-link" href="/model-sources">Model sources ↗</a><Tag type="blue" size="sm">Interactive mockup</Tag><span className="avatar" aria-label="Example resident Rosa">R</span></div></header>
-    <main><div className="welcome"><span className="welcome-date">SAMPLE RESIDENT · ROSA MARTINEZ</span><p>Hello, Rosa. Here is what the next few days may mean for your power.</p></div><div id="forecast"><MapPanel dayIndex={dayIndex} setDayIndex={setDayIndex} layer={layer} setLayer={setLayer} profile={profile} interviewActive={interviewActive} onCompleteInterview={completeInterview} /></div><div className="section-bridge"><div><span className="section-kicker">FROM OUTLOOK TO ACTION</span><h2>Your forecast, turned into a plan.</h2></div><ArrowRight size={24} aria-hidden="true" /></div><div id="plan"><PlanAndSettingsPanel profile={profile} sources={sources} plan={plan} checked={checked} setChecked={setChecked} onToggle={toggleProfile} onRestartInterview={() => { setInterviewActive(true); document.getElementById("forecast")?.scrollIntoView({ behavior: "smooth" }); }} /></div><div id="assistant"><AssistantPanel profile={profile} onSetProfile={setProfileOn} /></div></main><footer className="site-footer"><span>Runway · Static product preview</span><span>Map, forecasts, prices, resident, and chat responses are illustrative. No API calls or live alerts.</span></footer>
-  </div></Theme>;
+
+  return (
+    <Theme theme="g10">
+      <div className="site-shell">
+        <header className="site-header">
+          <div className="brand">
+            <span className="brand-mark"><Flash size={20} /></span>
+            <span>runway<span className="brand-period">.</span></span>
+          </div>
+          <nav className="header-nav" aria-label="Page sections">
+            <a href="#forecast">Forecast</a>
+            <a href="#plan">My plan</a>
+            <a href="#settings">Settings</a>
+            <a href="#assistant">Assistant</a>
+          </nav>
+          <div className="header-right">
+            <a className="header-model-link" href="/model-sources">Model sources ↗</a>
+            <Tag type="blue" size="sm">Interactive mockup</Tag>
+            <span className="avatar" aria-label="Example resident Rosa">R</span>
+          </div>
+        </header>
+
+        <main>
+          <div className="welcome">
+            <span className="welcome-date">SAMPLE RESIDENT · ROSA MARTINEZ</span>
+            <p>Hello, Rosa. Here is what the next few days may mean for your power.</p>
+          </div>
+
+          {/* Forecast section — new API-driven panel */}
+          <div id="forecast">
+            <ForecastPanel fips={fips} onFipsChange={setFips} />
+          </div>
+
+          {/* Interview overlay — only shown before plan is set up */}
+          {interviewActive && (
+            <div className="interview-overlay">
+              <InterviewPanel profile={profile} onComplete={completeInterview} />
+            </div>
+          )}
+
+          <div className="section-bridge">
+            <div>
+              <span className="section-kicker">FROM OUTLOOK TO ACTION</span>
+              <h2>Your forecast, turned into a plan.</h2>
+            </div>
+            <ArrowRight size={24} aria-hidden="true" />
+          </div>
+
+          <div id="plan">
+            <PlanAndSettingsPanel
+              profile={profile}
+              sources={sources}
+              plan={plan}
+              checked={checked}
+              setChecked={setChecked}
+              onToggle={toggleProfile}
+              onRestartInterview={() => {
+                setInterviewActive(true);
+                document.getElementById("forecast")?.scrollIntoView({ behavior: "smooth" });
+              }}
+            />
+          </div>
+
+          <div id="assistant">
+            <AssistantPanel profile={profile} onSetProfile={setProfileOn} />
+          </div>
+        </main>
+
+        <footer className="site-footer">
+          <span>Runway · Static product preview</span>
+          <span>
+            County forecast data is sample output from an unvalidated model stub.
+            No numeric outage probabilities are presented as validated predictions.
+          </span>
+        </footer>
+      </div>
+    </Theme>
+  );
 }

@@ -3,6 +3,9 @@
 @use '@carbon/styles/scss/zone';
 @use '@carbon/styles/scss/components/button';
 @use '@carbon/styles/scss/components/checkbox';
+@use '@carbon/styles/scss/components/notification';
+@use '@carbon/styles/scss/components/select';
+@use '@carbon/styles/scss/components/skeleton-styles';
 @use '@carbon/styles/scss/components/tag';
 @use '@carbon/styles/scss/components/tile';
 
@@ -224,3 +227,93 @@ button { cursor: pointer; }
   .site-footer span { display: block; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; scroll-behavior: auto !important; } }
+
+/* =========================================================================
+   Forecast panel — API-driven county forecast UI
+   ========================================================================= */
+
+/* Section wrapper */
+.forecast-section { padding-bottom: 18px; }
+.forecast-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 24px; }
+.forecast-heading h1 { margin: 8px 0 7px; font-size: clamp(34px, 3.5vw, 49px); line-height: 1.1; font-weight: 300; letter-spacing: -.025em; }
+.forecast-heading p { color: #525252; font-size: 15px; line-height: 1.5; }
+
+/* County selector */
+.county-selector { flex: none; width: 260px; }
+.county-selector .cds--select { width: 100%; }
+
+/* Window tabs (Next 24h / 24–48h / 48–72h) */
+.window-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: #d0d0d0; border-bottom: 1px solid #d0d0d0; margin-bottom: 1px; }
+.window-tabs button { min-height: 80px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 4px; padding: 14px 20px; border: 0; border-top: 3px solid transparent; color: #525252; background: #fff; text-align: left; }
+.window-tabs button[aria-selected="true"] { border-top-color: #0f62fe; background: #edf5ff; color: #161616; }
+.window-tabs button:hover:not([aria-selected="true"]) { background: #f8f8f8; }
+.window-tabs button span:first-child { font-size: 12px; font-weight: 600; }
+.window-tabs button strong { font-size: 22px; font-weight: 300; letter-spacing: -.02em; color: #0f62fe; }
+.window-tabs button span:last-child { font-size: 11px; color: #6f6f6f; }
+.window-tabs button:focus-visible { outline: 2px solid #0f62fe; outline-offset: -2px; }
+
+/* Forecast card */
+.forecast-card { background: #fff; box-shadow: none; padding: 26px 25px 20px; }
+.forecast-card--loading { display: flex; flex-direction: column; gap: 18px; padding: 30px; }
+.forecast-card--loading .cds--loading { align-self: flex-start; }
+
+.forecast-badges { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* Probability display */
+.forecast-prob { margin: 24px 0 3px; color: #0f62fe; font-size: 64px; line-height: 1; font-weight: 300; letter-spacing: -.04em; }
+.forecast-prob-label { color: #525252; font-size: 13px; max-width: 380px; line-height: 1.4; }
+
+/* Insufficient data state */
+.forecast-no-data { margin: 24px 0 3px; color: #8d8d8d; font-size: 48px; line-height: 1; font-weight: 300; }
+.forecast-no-data-label { color: #525252; font-size: 13px; max-width: 520px; line-height: 1.45; }
+
+/* Active alert pills */
+.forecast-alerts { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.forecast-alert-pill { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; background: #fff8e1; border-left: 3px solid #f1c21b; color: #6b4e00; font-size: 12px; font-weight: 600; }
+.forecast-alert-pill svg { flex: none; }
+
+/* Reasons */
+.forecast-reasons { margin: 20px 0 0; }
+.forecast-reasons ul { margin: 8px 0 0; padding: 0; list-style: none; }
+.forecast-reasons li { padding: 8px 0; border-bottom: 1px solid #e0e0e0; font-size: 13px; line-height: 1.4; color: #393939; }
+.forecast-reasons li:last-child { border-bottom: 0; }
+.forecast-reasons li::before { content: "↗ "; color: #0f62fe; font-weight: 700; }
+
+/* Data rows */
+.forecast-rows { border-top: 1px solid #e0e0e0; margin-top: 18px; }
+.forecast-rows > div { display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid #e0e0e0; }
+.forecast-rows span { color: #6f6f6f; font-size: 12px; }
+.forecast-rows strong { max-width: 60%; font-size: 12px; font-weight: 600; text-align: right; }
+
+/* Transfer estimate notice */
+.forecast-transfer-notice { display: flex; align-items: flex-start; gap: 10px; margin-top: 18px; padding: 12px 14px; background: #edf5ff; color: #004185; font-size: 12px; line-height: 1.5; }
+.forecast-transfer-notice svg { flex: none; margin-top: 1px; }
+
+/* Freshness */
+.forecast-meta { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 16px; padding-top: 12px; border-top: 1px solid #e0e0e0; color: #6f6f6f; font-size: 11px; }
+.forecast-stale { color: #f1a200; font-weight: 600; }
+
+/* Disclaimer */
+.forecast-disclaimer { margin-top: 14px; color: #6f6f6f; font-size: 11px; line-height: 1.5; max-width: 640px; }
+
+/* Retry button inside InlineNotification */
+.forecast-retry-btn { padding: 4px 8px; border: 1px solid #0f62fe; background: transparent; color: #0f62fe; font: inherit; font-size: 12px; cursor: pointer; }
+.forecast-retry-btn:hover { background: #edf5ff; }
+
+/* Interview overlay (shown above forecast before plan is set up) */
+.interview-overlay { margin: 20px 0; max-width: 520px; }
+
+/* Responsive */
+@media (max-width: 800px) {
+  .forecast-heading { display: block; }
+  .county-selector { width: 100%; margin-top: 16px; }
+  .window-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .window-tabs button { min-height: 70px; padding: 10px 12px; }
+  .window-tabs button strong { font-size: 18px; }
+}
+@media (max-width: 600px) {
+  .forecast-heading h1 { font-size: 37px; }
+  .window-tabs button { padding: 10px 8px; }
+  .window-tabs button strong { font-size: 16px; }
+  .forecast-prob { font-size: 51px; }
+}

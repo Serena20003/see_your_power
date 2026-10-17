@@ -1,0 +1,22 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8080:8080"
+    environment:
+      - USE_FIXTURES=true
+    volumes:
+      - ./fixtures:/app/fixtures:ro
+
+  batch:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - USE_FIXTURES=true
+    volumes:
+      - ./fixtures:/app/fixtures:ro
+    profiles:
+      - batch
