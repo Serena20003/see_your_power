@@ -232,13 +232,24 @@ async def forecast_county(
 # Batch entry point
 # ---------------------------------------------------------------------------
 
-async def run_batch(use_fixtures: bool = False) -> list[CountyForecast]:
-    issue_time = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+async def run_batch(use_fixtures: bool = False, issue_time: datetime | None = None) -> list[CountyForecast]:
+    if issue_time is None:
+        issue_time = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
     counties = load_county_registry()
     model = OutageOnsetModel(version=MODEL_VERSION)
 
     # In production: load from Cloud Storage artifact.
     # model = OutageOnsetModel.load("gs://runway-models/onset/latest.pkl")
+    #
+    # In dev/fixture mode, fit the stub on synthetic data so predict_proba works.
+    if not model._fitted:
+        try:
+            from training.synthetic_data import generate_training_set
+            _, X, df = generate_training_set(n_samples=2000, seed=42)
+            y = df["outage_occurred"].to_numpy(dtype=np.float64)
+            model.fit(X, y)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not auto-fit model stub: %s — probabilities will use heuristic.", exc)
 
     duration_model = ConditionalDurationModel()
     logger.info("Starting batch inference for %d counties at %s", len(counties), issue_time)

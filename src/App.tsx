@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { Button, Checkbox, Tag, Theme, Tile } from "@carbon/react";
+import { Button, Checkbox, InlineLoading, Tag, Theme, Tile } from "@carbon/react";
 import { ArrowRight, Chat, Flash, Send, SettingsAdjust } from "@carbon/icons-react";
 import ForecastPanel from "./ForecastPanel";
 import { createPlan, initialProfile, profileChoices, type PlanItem, type Profile, type ProfileKey } from "./mockModel";
+import { fetchPlan, type ApiPlanItem } from "./api";
 
 type ChatMessage = { role: "assistant" | "user"; text: string };
 type FactSource = "sample" | "interview" | "chat" | "edited";
@@ -45,47 +46,154 @@ function PlanAndSettingsPanel({ profile, sources, plan, checked, setChecked, onT
   </Tile>;
 }
 
-function responseFor(input: string, profile: Profile): { answer: string; update?: ProfileKey } {
-  const text = input.toLowerCase();
-  if (text.includes("insulin") || text.includes("medicine")) return { answer: "I added medicine cooling to this example plan. You can review or remove that answer in your settings below the plan.", update: "insulin" };
-  if (text.includes("ev") || text.includes("electric car")) return { answer: "I added EV charging to your example plan. You can review or remove that answer in your settings below the plan.", update: "ev" };
-  if (text.includes("laundry")) return { answer: "I added flexible laundry timing to your example plan. You can review or remove that answer in your settings below the plan.", update: "laundry" };
-  if (text.includes("bill") || text.includes("cheap") || text.includes("price")) return { answer: "I added a lower-cost preference. The price period is only an example; a real plan would need your utility tariff. You can correct this in settings.", update: "costAware" };
-  if (text.includes("family") || text.includes("elena") || text.includes("check in")) return { answer: "I added family check-ins to the example plan. You can review or remove that answer in settings.", update: "family" };
-  return { answer: profile.oxygen ? "I can help adjust your example plan. Try mentioning an EV, insulin fridge, laundry, family check-in, or lower bills." : "Tell me about an EV, medicine fridge, laundry, family check-in, or lower bills, and I can update this example plan." };
+/** Convert a watsonx `when` string to a display label matching mockModel style. */
+function whenLabel(when: ApiPlanItem["when"]): string {
+  switch (when) {
+    case "two_days_before": return "TWO DAYS BEFORE";
+    case "night_before":    return "NIGHT BEFORE";
+    case "one_hour_before": return "ONE HOUR BEFORE";
+    case "during_outage":   return "DURING OUTAGE";
+  }
 }
 
-function AssistantPanel({ profile, onSetProfile }: { profile: Profile; onSetProfile: (key: ProfileKey) => void }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([{ role: "assistant", text: "Hi Rosa. What would make this plan fit your household better? You can tell me about a device, routine, or family check-in." }]);
+function AssistantPanel({
+  profile,
+  onSetProfile,
+  onPlanItems,
+}: {
+  profile: Profile;
+  onSetProfile: (key: ProfileKey) => void;
+  onPlanItems: (items: ApiPlanItem[]) => void;
+}) {
+  const [messages, setMessages] = useState<ChatMessage[]>([{
+    role: "assistant",
+    text: "Hi Rosa. Tell me about your household — a device, routine, or concern — and I'll add personalised steps to your plan.",
+  }]);
   const [input, setInput] = useState("");
-  function submit(message: string) {
+  const [loading, setLoading] = useState(false);
+
+  async function submit(message: string) {
     const trimmed = message.trim();
-    if (!trimmed) return;
-    const response = responseFor(trimmed, profile);
-    if (response.update) onSetProfile(response.update);
-    setMessages((current) => [...current, { role: "user", text: trimmed }, { role: "assistant", text: response.answer }]);
+    if (!trimmed || loading) return;
     setInput("");
+    setMessages((prev) => [...prev, { role: "user", text: trimmed }]);
+    setLoading(true);
+
+    // Mirror keyword hints into profile flags (still instant UX)
+    const text = trimmed.toLowerCase();
+    if (text.includes("insulin") || text.includes("medicine")) onSetProfile("insulin");
+    else if (text.includes("ev") || text.includes("electric car")) onSetProfile("ev");
+    else if (text.includes("laundry")) onSetProfile("laundry");
+    else if (text.includes("bill") || text.includes("cheap") || text.includes("price")) onSetProfile("costAware");
+    else if (text.includes("family") || text.includes("check in")) onSetProfile("family");
+
+    try {
+      const devices: string[] = [];
+      if (profile.oxygen) devices.push("oxygen_concentrator");
+      if (profile.insulin) devices.push("insulin_fridge");
+      if (trimmed.toLowerCase().includes("insulin") || trimmed.toLowerCase().includes("medicine")) devices.push("insulin_fridge");
+      if (trimmed.toLowerCase().includes("cpap")) devices.push("cpap");
+      if (trimmed.toLowerCase().includes("dialysis")) devices.push("home_dialysis");
+      if (trimmed.toLowerCase().includes("wheelchair")) devices.push("power_wheelchair");
+
+      const result = await fetchPlan({
+        resident: {
+          name: "Rosa Martinez",
+          age: 78,
+          devices: [...new Set(devices)],
+          hasEV: profile.ev || trimmed.toLowerCase().includes("ev"),
+          livesAlone: true,
+          language: "en",
+        },
+        forecast: { probability: 0.74, primaryCause: "wind" },
+      });
+
+      onPlanItems(result.items);
+
+      const summary = result.items.slice(0, 3).map((item) => `• ${item.title_en}`).join("\n");
+      const sourceNote = result.source === "fallback" ? " (using template plan — connect watsonx for personalised responses)" : "";
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", text: `I've added ${result.items.length} steps to your plan${sourceNote}:\n${summary}${result.items.length > 3 ? "\n…and more below." : ""}` },
+      ]);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", text: "I couldn't reach the plan service right now. Check that the backend is running at VITE_API_BASE_URL." },
+      ]);
+    } finally {
+      setLoading(false);
+    }
   }
-  return <Tile className="assistant-card" role="region" aria-labelledby="assistant-title"><div className="assistant-top"><div className="assistant-icon"><Chat size={21} /></div><div><span className="section-kicker">PLAN ASSISTANT · PREVIEW</span><h2 id="assistant-title">Talk through your plan</h2></div></div><p className="assistant-disclaimer">Local scripted demo. No AI connection, saved memory, or live guidance.</p><div className="chat-feed" role="log" aria-label="Plan assistant conversation" aria-live="polite">{messages.map((message, index) => <div className={`chat-bubble ${message.role}`} key={index}><span>{message.role === "assistant" ? "Runway" : "You"}</span><p>{message.text}</p></div>)}</div><div className="chat-suggestions"><button type="button" onClick={() => submit("I have an insulin fridge")}>I have an insulin fridge</button><button type="button" onClick={() => submit("I have an EV")}>I have an EV</button><button type="button" onClick={() => submit("I want lower bills")}>I want lower bills</button></div><form className="chat-form" onSubmit={(event) => { event.preventDefault(); submit(input); }}><label className="sr-only" htmlFor="chat-input">Tell the assistant about your household</label><input id="chat-input" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Tell me about your household…" /><Button type="submit" kind="primary" size="sm" disabled={!input.trim()} renderIcon={Send}>Send</Button></form><p className="assistant-future">Future workflow: with consent, a connected assistant could ask follow-up questions, remember confirmed preferences, and revise the plan as forecasts change.</p></Tile>;
+
+  return (
+    <Tile className="assistant-card" role="region" aria-labelledby="assistant-title">
+      <div className="assistant-top">
+        <div className="assistant-icon"><Chat size={21} /></div>
+        <div>
+          <span className="section-kicker">PLAN ASSISTANT · WATSONX</span>
+          <h2 id="assistant-title">Talk through your plan</h2>
+        </div>
+      </div>
+      <p className="assistant-disclaimer">Powered by watsonx.ai. Falls back to static templates when credentials are not configured.</p>
+      <div className="chat-feed" role="log" aria-label="Plan assistant conversation" aria-live="polite">
+        {messages.map((message, index) => (
+          <div className={`chat-bubble ${message.role}`} key={index}>
+            <span>{message.role === "assistant" ? "Runway" : "You"}</span>
+            <p style={{ whiteSpace: "pre-line" }}>{message.text}</p>
+          </div>
+        ))}
+        {loading && <div className="chat-bubble assistant"><InlineLoading description="Thinking…" /></div>}
+      </div>
+      <div className="chat-suggestions">
+        <button type="button" onClick={() => submit("I have an insulin fridge")}>I have an insulin fridge</button>
+        <button type="button" onClick={() => submit("I have an EV")}>I have an EV</button>
+        <button type="button" onClick={() => submit("I want lower bills")}>I want lower bills</button>
+      </div>
+      <form className="chat-form" onSubmit={(event) => { event.preventDefault(); submit(input); }}>
+        <label className="sr-only" htmlFor="chat-input">Tell the assistant about your household</label>
+        <input id="chat-input" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Tell me about your household…" disabled={loading} />
+        <Button type="submit" kind="primary" size="sm" disabled={!input.trim() || loading} renderIcon={Send}>Send</Button>
+      </form>
+    </Tile>
+  );
 }
 
 export default function App() {
   // County FIPS — default to Los Angeles for the demo
   const [fips, setFips] = useState("06037");
 
-  // Personal plan state (unchanged from original)
+  // Personal plan state
   const [profile, setProfile] = useState<Profile>(initialProfile);
   const [sources, setSources] = useState<Sources>(() => Object.fromEntries(profileChoices.map((choice) => [choice.key, "sample"])) as Sources);
   const [interviewActive, setInterviewActive] = useState(true);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
+  // Extra items added by the assistant (from watsonx /v1/plan)
+  const [assistantItems, setAssistantItems] = useState<PlanItem[]>([]);
 
-  // Plan is driven by profile only (the county forecast enriches it in the
-  // production /api/plan flow; for the demo mockModel.createPlan suffices).
-  const plan = useMemo(() => createPlan(profile, 50), [profile]);
+  const basePlan = useMemo(() => createPlan(profile, 50), [profile]);
+  // Merge base plan with any assistant-generated items (deduplicate by id)
+  const plan = useMemo(() => {
+    const existing = new Set(basePlan.map((item) => item.id));
+    const extras = assistantItems.filter((item) => !existing.has(item.id));
+    return [...basePlan, ...extras];
+  }, [basePlan, assistantItems]);
 
   const toggleProfile = (key: ProfileKey) => { setProfile((current) => ({ ...current, [key]: !current[key] })); setSources((current) => ({ ...current, [key]: "edited" })); };
   const setProfileOn = (key: ProfileKey) => { setProfile((current) => ({ ...current, [key]: true })); setSources((current) => ({ ...current, [key]: "chat" })); };
   const completeInterview = (answer: Profile | null) => { if (answer) { setProfile(answer); setSources(Object.fromEntries(profileChoices.map((choice) => [choice.key, "interview"])) as Sources); } setInterviewActive(false); };
+
+  /** Convert watsonx ApiPlanItems into PlanItems and merge into the plan list. */
+  function handleAssistantPlanItems(items: ApiPlanItem[]) {
+    const newItems: PlanItem[] = items.map((item, i) => ({
+      id: `assistant-${i}-${item.when}`,
+      when: whenLabel(item.when),
+      title: item.title_en,
+      why: item.reason_en,
+      category: "essential" as const,
+    }));
+    setAssistantItems(newItems);
+  }
 
   return (
     <Theme theme="g10">
@@ -150,7 +258,7 @@ export default function App() {
           </div>
 
           <div id="assistant">
-            <AssistantPanel profile={profile} onSetProfile={setProfileOn} />
+            <AssistantPanel profile={profile} onSetProfile={setProfileOn} onPlanItems={handleAssistantPlanItems} />
           </div>
         </main>
 

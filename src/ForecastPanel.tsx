@@ -20,6 +20,7 @@ import {
 } from "@carbon/react";
 import { ArrowRight, CloudMonitoring, WarningAlt } from "@carbon/icons-react";
 import CountySelector from "./CountySelector";
+import CountyRiskMap from "./CountyRiskMap";
 import { useForecast } from "./useForecast";
 import { formatForecastAge, formatProbability, statusBadgeText } from "./api";
 import type { CountyForecast, ForecastWindow } from "./types";
@@ -293,6 +294,14 @@ export default function ForecastPanel({ fips, onFipsChange }: ForecastPanelProps
           lowContrast
         />
       )}
+
+      {/* County risk map — always shown, synced to active window */}
+      <CountyRiskMap
+        activeFips={fips}
+        activeWindow={activeWindow}
+        onSelectFips={onFipsChange}
+        activeForecast={forecast}
+      />
 
       {/* Window tabs */}
       {forecast && (

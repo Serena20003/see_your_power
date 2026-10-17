@@ -18,9 +18,12 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
+import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, ValidationError
 
 # Allow running from model/ directory
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -51,9 +54,172 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],   # Tighten in production
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+
+# ---------------------------------------------------------------------------
+# /v1/plan  — request / response models
+# ---------------------------------------------------------------------------
+
+class PlanResident(BaseModel):
+    name: str
+    age: int | None = None
+    devices: list[str] = []
+    batteryWh: float | None = None
+    isRenter: bool = False
+    livesAlone: bool = False
+    hasEV: bool = False
+    language: str = "en"
+
+class PlanForecast(BaseModel):
+    probability: float
+    windowStart: str = ""
+    windowEnd: str = ""
+    durationLowHours: float | None = None
+    durationHighHours: float | None = None
+    primaryCause: str = ""
+    reasons: list[str] = []
+
+class PlanRequest(BaseModel):
+    resident: PlanResident
+    forecast: PlanForecast
+    runwayHoursAtFullCharge: float | None = None
+    nearestCoolPlace: str = ""
+
+WhenLiteral = Literal["two_days_before", "night_before", "one_hour_before", "during_outage"]
+
+class PlanItem(BaseModel):
+    title: str
+    title_en: str
+    when: WhenLiteral
+    reason: str
+    reason_en: str
+
+class PlanResponse(BaseModel):
+    items: list[PlanItem]
+    source: Literal["llm", "fallback"] = "llm"
+
+
+# ---------------------------------------------------------------------------
+# /v1/plan  — watsonx.ai helper
+# ---------------------------------------------------------------------------
+
+_SYSTEM_PROMPT = """\
+You write short, practical power-outage preparation plans for one specific household.
+Use only the facts provided. Do not give medical treatment advice, dosing or diagnosis.
+Focus on preparation actions: charging, backups, food and medicine storage, staying cool or warm,
+communication with family, and where to go.
+If the backup battery covers fewer hours than the expected outage, say clearly that they need a second
+power source or a place to go, and include that as an item.
+Write in plain language at about a 6th-grade reading level.
+Return only JSON matching the schema. 4 to 6 items.
+Write the "title" and "reason" fields in the resident's language code given in the input,
+and also return an English copy in "title_en" and "reason_en".
+
+Schema:
+{
+  "items": [
+    {
+      "title": "string",
+      "title_en": "string",
+      "when": "two_days_before | night_before | one_hour_before | during_outage",
+      "reason": "string",
+      "reason_en": "string"
+    }
+  ]
+}
+"""
+
+
+def _build_fallback(req: PlanRequest) -> PlanResponse:
+    """Build a plan from static templates when the LLM is unavailable."""
+    templates: dict = json.loads((FIXTURES_DIR / "plan_templates.json").read_text())
+    items: list[PlanItem] = []
+
+    for device in req.resident.devices:
+        device_key = device.replace("-", "_")
+        for t in templates.get(device_key, []):
+            items.append(PlanItem(
+                title=t["title"], title_en=t["title"],
+                when=t.get("when", "night_before"),
+                reason=t["reason"], reason_en=t["reason"],
+            ))
+
+    # Always add general items (phone, flashlight, never-use-generator)
+    for t in templates.get("general", []):
+        title = t["title"].replace("{contact}", "your family contact").replace(
+            "{coolPlace}", req.nearestCoolPlace or "your nearest community center"
+        )
+        items.append(PlanItem(
+            title=title, title_en=title,
+            when=t.get("when", "night_before"),
+            reason=t["reason"], reason_en=t["reason"],
+        ))
+
+    return PlanResponse(items=items[:6], source="fallback")
+
+
+async def _call_watsonx(req: PlanRequest) -> PlanResponse:
+    """Call watsonx.ai chat completions and parse the JSON response."""
+    api_key = os.getenv("WATSONX_API_KEY", "")
+    project_id = os.getenv("WATSONX_PROJECT_ID", "")
+    region = os.getenv("WATSONX_REGION", "us-south")
+    model_id = os.getenv("WATSONX_MODEL_ID", "ibm/granite-3-3-8b-instruct")
+
+    if not api_key or not project_id:
+        raise ValueError("WATSONX_API_KEY and WATSONX_PROJECT_ID must be set")
+
+    # Obtain IAM token
+    iam_url = "https://iam.cloud.ibm.com/identity/token"
+    async with httpx.AsyncClient(timeout=20) as client:
+        token_resp = await client.post(
+            iam_url,
+            data={"grant_type": "urn:ibm:params:oauth:grant-type:apikey", "apikey": api_key},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        token_resp.raise_for_status()
+        iam_token = token_resp.json()["access_token"]
+
+        user_message = json.dumps({
+            "resident": req.resident.model_dump(),
+            "forecast": req.forecast.model_dump(),
+            "runwayHoursAtFullCharge": req.runwayHoursAtFullCharge,
+            "nearestCoolPlace": req.nearestCoolPlace,
+        }, indent=2)
+
+        wx_url = (
+            f"https://{region}.ml.cloud.ibm.com/ml/v1/text/chat"
+            "?version=2024-05-01"
+        )
+        payload = {
+            "model_id": model_id,
+            "project_id": project_id,
+            "messages": [
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            "parameters": {"max_new_tokens": 1024, "temperature": 0.2},
+        }
+        wx_resp = await client.post(
+            wx_url,
+            json=payload,
+            headers={"Authorization": f"Bearer {iam_token}", "Content-Type": "application/json"},
+            timeout=60,
+        )
+        wx_resp.raise_for_status()
+
+    raw_text: str = wx_resp.json()["choices"][0]["message"]["content"]
+
+    # Strip markdown fences if the model wraps its output
+    if "```" in raw_text:
+        raw_text = raw_text.split("```")[1]
+        if raw_text.startswith("json"):
+            raw_text = raw_text[4:]
+
+    parsed = json.loads(raw_text)
+    return PlanResponse(**parsed, source="llm")
 
 
 # ---------------------------------------------------------------------------
@@ -165,3 +331,22 @@ def get_coverage() -> list[CountyCoverage]:
         with open(path) as f:
             return [CountyCoverage.model_validate(item) for item in json.load(f)]
     return []
+
+
+@app.post("/v1/plan", response_model=PlanResponse)
+async def post_plan(req: PlanRequest) -> PlanResponse:
+    """
+    Generate a personalised outage preparation plan for one household.
+
+    Calls watsonx.ai when credentials are configured; falls back to static
+    templates from fixtures/plan_templates.json otherwise.
+    """
+    try:
+        return await _call_watsonx(req)
+    except (ValueError, KeyError):
+        # Credentials not configured — silent fallback
+        logger.info("watsonx credentials not set; using fallback templates")
+    except (httpx.HTTPError, json.JSONDecodeError, ValidationError) as exc:
+        logger.warning("watsonx call failed (%s); using fallback templates", exc)
+
+    return _build_fallback(req)

@@ -11,8 +11,11 @@
   "dependencies": {
     "@carbon/icons-react": "^11.90.0",
     "@carbon/react": "^1.118.0",
+    "@types/leaflet": "^1.9.22",
+    "leaflet": "^1.9.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-leaflet": "^5.0.0",
     "sass": "^1.105.2"
   },
   "devDependencies": {

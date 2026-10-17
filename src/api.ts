@@ -132,7 +132,7 @@ function buildDemoWindow(
   };
 }
 
-function buildDemoForecast(fips: string): CountyForecast {
+export function buildDemoForecast(fips: string): CountyForecast {
   const c = DEMO_COUNTIES[fips] ?? DEMO_COUNTIES["06037"];
   const now = new Date().toISOString();
   return {
@@ -260,6 +260,68 @@ export async function fetchCoverage(): Promise<CountyCoverage[]> {
   } catch {
     return [];
   }
+}
+
+// -------------------------------------------------------------------------
+// /v1/plan  types + fetch
+// -------------------------------------------------------------------------
+
+export type PlanWhen = "two_days_before" | "night_before" | "one_hour_before" | "during_outage";
+
+export interface ApiPlanItem {
+  title: string;
+  title_en: string;
+  when: PlanWhen;
+  reason: string;
+  reason_en: string;
+}
+
+export interface ApiPlanResponse {
+  items: ApiPlanItem[];
+  source: "llm" | "fallback";
+}
+
+export interface PlanRequestPayload {
+  resident: {
+    name: string;
+    age?: number;
+    devices: string[];
+    batteryWh?: number;
+    isRenter?: boolean;
+    livesAlone?: boolean;
+    hasEV?: boolean;
+    language?: string;
+  };
+  forecast: {
+    probability: number;
+    windowStart?: string;
+    windowEnd?: string;
+    durationLowHours?: number;
+    durationHighHours?: number;
+    primaryCause?: string;
+    reasons?: string[];
+  };
+  runwayHoursAtFullCharge?: number;
+  nearestCoolPlace?: string;
+}
+
+/**
+ * POST /v1/plan — generate a personalised outage preparation plan.
+ * Falls back gracefully to the static template response when the server
+ * is unreachable or watsonx credentials are not configured.
+ */
+export async function fetchPlan(
+  payload: PlanRequestPayload
+): Promise<ApiPlanResponse> {
+  const url = `${API_BASE}/v1/plan`;
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status} from /v1/plan`);
+  return resp.json() as Promise<ApiPlanResponse>;
 }
 
 // -------------------------------------------------------------------------

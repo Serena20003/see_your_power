@@ -1,0 +1,61 @@
+{
+  "county_fips": "06037",
+  "county_name": "Los Angeles",
+  "state": "CA",
+  "model_version": "0.0.0-stub",
+  "issued_at": "2024-08-01T12:00:00Z",
+  "source_timestamps": {
+    "gfs": "2024-08-01T12:00:00Z",
+    "nws": "2024-08-01T12:00:00Z"
+  },
+  "status": "local_validated",
+  "next_24h": {
+    "window_label": "Next 24h",
+    "window_start": "2024-08-01T12:00:00Z",
+    "window_end": "2024-08-02T12:00:00Z",
+    "probability": 0.7654417752108167,
+    "duration_low_hours": 2.75,
+    "duration_high_hours": 8.25,
+    "reasons": [
+      "High Wind Warning in effect",
+      "4 unplanned outages here in the last 3 years",
+      "Wind gusts up to 48 mph",
+      "Mostly overhead power lines"
+    ],
+    "primary_driver": "wind",
+    "active_alerts": [
+      "High Wind Warning"
+    ]
+  },
+  "next_24_48h": {
+    "window_label": "24\u201348h",
+    "window_start": "2024-08-02T12:00:00Z",
+    "window_end": "2024-08-03T12:00:00Z",
+    "probability": 0.5593896198265602,
+    "duration_low_hours": 2.75,
+    "duration_high_hours": 8.25,
+    "reasons": [
+      "4 unplanned outages here in the last 3 years",
+      "Wind gusts up to 38 mph",
+      "Mostly overhead power lines",
+      "18% tree cover near power lines"
+    ],
+    "primary_driver": "wind",
+    "active_alerts": []
+  },
+  "next_48_72h": {
+    "window_label": "48\u201372h",
+    "window_start": "2024-08-03T12:00:00Z",
+    "window_end": "2024-08-04T12:00:00Z",
+    "probability": null,
+    "duration_low_hours": null,
+    "duration_high_hours": null,
+    "reasons": [],
+    "primary_driver": "unknown",
+    "active_alerts": []
+  },
+  "is_stale": false,
+  "stale_reason": null,
+  "max_gust_mph": 48.0,
+  "max_temp_f": 88.0
+}
