@@ -1,0 +1,63 @@
+{
+  "contract": "Resident-facing React mockup using IBM Carbon. Primary job: explore a weather-style power map, answer first-use questions, understand why each suggested action appears, and correct what the assistant has learned. Phone and desktop layouts, local scripted chat, and no API calls.",
+  "targetViewports": [
+    "1440x900",
+    "390x844"
+  ],
+  "accessibility": {
+    "status": "pass",
+    "evidence": "Browser accessibility snapshot exposes the map, interview, plan, and settings as named regions; day and layer controls have pressed states; the interview, plan, and settings use labeled Carbon checkboxes. Focus styles and reduced-motion rules are present."
+  },
+  "responsive": {
+    "status": "pass",
+    "evidence": "Rendered wide and narrow layouts. Browser measurements showed scroll width equal to content viewport width for desktop and phone views, with no page-level horizontal overflow."
+  },
+  "contentStates": {
+    "loading": {
+      "status": "not-applicable",
+      "reason": "The mockup reads synchronous local objects and has no loading operation."
+    },
+    "empty": {
+      "status": "not-applicable",
+      "reason": "The three local examples always include a preparation plan; no empty collection can be reached."
+    },
+    "error": {
+      "status": "not-applicable",
+      "reason": "The mockup makes no network or storage calls that can fail."
+    },
+    "partial": {
+      "status": "not-applicable",
+      "reason": "The static mock forecast includes all local fields. Production partial-data behavior remains to be designed with real sources."
+    },
+    "success": {
+      "status": "pass",
+      "evidence": "Completed the three-step interview, used chat to add an EV, then corrected that fact in settings. The setting source changed from Added in chat to You corrected this and the EV plan item disappeared. Day and layer controls and plan checkboxes also update locally."
+    },
+    "permission": {
+      "status": "not-applicable",
+      "reason": "The mockup requests no device, account, location, or notification permissions."
+    }
+  },
+  "renderedEvidence": [
+    {
+      "viewport": "1440x900",
+      "artifact": "interview-desktop.jpg",
+      "observation": "Map and three-step first-use interview appear together."
+    },
+    {
+      "viewport": "1440x900",
+      "artifact": "desktop.jpg",
+      "observation": "Map outlook leads to one combined plan and settings panel. Each action includes its reason."
+    },
+    {
+      "viewport": "390x844",
+      "artifact": "interview-mobile.jpg",
+      "observation": "Map, interview, plan, settings, and chat stack vertically."
+    },
+    {
+      "viewport": "390x844",
+      "artifact": "mobile.jpg",
+      "observation": "The combined plan and settings remain readable without horizontal overflow."
+    }
+  ]
+}
