@@ -356,7 +356,7 @@ button { cursor: pointer; }
   font-size: 11px;
 }
 .risk-legend-item { display: flex; align-items: center; gap: 5px; color: #525252; }
-.risk-legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.risk-legend-swatch { display: inline-block; width: 28px; height: 10px; border-radius: 2px; flex: none; opacity: 0.8; }
 .risk-legend-note { margin-left: auto; color: #8d8d8d; font-style: italic; }
 
 @media (max-width: 600px) {
