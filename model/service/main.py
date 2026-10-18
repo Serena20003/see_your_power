@@ -27,9 +27,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ValidationError
 from dotenv import load_dotenv
 
-# Vite reads the repository's .env.local, but the Python service does not.
-# Load it for local development while preserving variables supplied by the host.
-load_dotenv(Path(__file__).resolve().parents[2] / ".env.local", override=False)
+# Match Vite's local development env files. Explicit process variables take
+# precedence, followed by .env.local, then .env.development.local.
+_repo_root = Path(__file__).resolve().parents[2]
+load_dotenv(_repo_root / ".env.local", override=False)
+load_dotenv(_repo_root / ".env.development.local", override=False)
 
 # Allow running from model/ directory
 sys.path.insert(0, str(Path(__file__).parent.parent))

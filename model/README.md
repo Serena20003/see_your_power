@@ -30,9 +30,11 @@ pytest
 ```
 
 For the plan assistant, set `WATSONX_API_KEY` and `WATSONX_PROJECT_ID` in the
-repository root `.env.local` (or in the service environment). The service loads
-that file at startup. Restart the API after changing credentials. The frontend
-also needs `VITE_API_BASE_URL=http://localhost:8080` in `.env.local`; restart
+repository root `.env.development.local` (or `.env.local`). The service loads
+these files at startup, so no shell exports are needed. Existing process
+variables take precedence, then `.env.local`, then `.env.development.local`.
+Restart the API after changing credentials. The frontend
+also needs `VITE_API_BASE_URL=http://localhost:8080` in one of those files; restart
 Vite after changing it. A response marked `source: "fallback"` means the plan
 service responded but watsonx was unavailable. Check the API log for the cause.
 Copy the project ID and API base URL from your watsonx project's **Developer
