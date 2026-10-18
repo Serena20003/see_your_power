@@ -140,7 +140,11 @@ Return only JSON matching the schema. Write "reply", "title" and "reason" in the
 language code, and provide English copies of item titles and reasons.
 When the language code is "en", every string in the response must be in English.
 Make every plan item title an action the resident can take, starting with a verb. Do not put a
-number, duration, price, or place in a plan item unless it was given in the latest message or forecast.
+number, duration, price, or place anywhere in the response unless it was given in the latest message
+or forecast. Do not compare outage length with battery runtime unless both values are provided.
+Do not claim you scheduled, contacted, booked, ordered, or charged anything; you can only suggest
+steps and add them to the plan.
+Only say you added a step to the plan if the "items" array contains that step.
 
 Schema:
 {
@@ -219,8 +223,50 @@ def _filter_generated_items(req: PlanRequest, items: list[PlanItem]) -> list[Pla
             continue
         if "insulin" in req.message.lower() and re.search(r"cooling center|public facilit", copy, re.I):
             continue
+        if re.search(r"\b(?:ensures?|guarantees?)\b", copy, re.I) and re.search(
+            r"\b(?:oxygen|concentrator|cpap|dialysis|wheelchair|insulin|medicine|medical device)\b", copy, re.I
+        ):
+            continue
         filtered.append(item)
     return filtered[:3]
+
+
+def _filter_generated_reply(req: PlanRequest, reply: str) -> str:
+    """Remove sentences with unsupported quantities or outage/runtime comparisons."""
+    allowed_numbers = set(re.findall(r"\d+(?:\.\d+)?", req.message))
+    for value in (req.forecast.durationLowHours, req.forecast.durationHighHours, req.runwayHoursAtFullCharge):
+        if value is not None:
+            allowed_numbers.add(str(value).removesuffix(".0"))
+
+    duration_known = req.forecast.durationLowHours is not None or req.forecast.durationHighHours is not None
+    runtime_known = req.runwayHoursAtFullCharge is not None
+    safe_sentences: list[str] = []
+    for sentence in re.split(r"(?<=[.!?。！？])\s+", reply.strip()):
+        if set(re.findall(r"\d+(?:\.\d+)?", sentence)) - allowed_numbers:
+            continue
+        if re.search(r"\b(?:ensures?|guarantees?)\b", sentence, re.I) and re.search(
+            r"\b(?:oxygen|concentrator|cpap|dialysis|wheelchair|insulin|medicine|medical device)\b", sentence, re.I
+        ):
+            continue
+        if re.search(r"\b(?:I(?:'|’)ll|I will|we(?:'|’)ll|we will)\s+(?:schedule|contact|book|reserve|order|charge)\b", sentence, re.I):
+            continue
+        if not (duration_known and runtime_known) and re.search(
+            r"(?:outage|power).*(?:exceed|longer than|outlast).*(?:battery|backup)"
+            r"|(?:battery|backup).*(?:shorter than|less than).*(?:outage|power)",
+            sentence,
+            re.I,
+        ):
+            continue
+        safe_sentences.append(sentence)
+
+    return " ".join(safe_sentences) or "Review the suggested steps and check your device instructions before relying on backup power."
+
+
+def _align_reply_with_items(reply: str, items: list[PlanItem]) -> str:
+    """Avoid saying a plan step was added when none survived validation."""
+    if not items and re.search(r"\b(?:add(?:ed)?|put|includ(?:e|ed))\b.{0,50}\b(?:plan|step|item)\b", reply, re.I):
+        return "I did not add a new step. Check your current plan for a related action, or tell me what else you need to prepare for."
+    return reply
 
 
 async def _call_watsonx(req: PlanRequest) -> PlanResponse:
@@ -285,6 +331,7 @@ async def _call_watsonx(req: PlanRequest) -> PlanResponse:
     parsed = json.loads(raw_text)
     response = PlanResponse(**parsed, source="llm")
     response.items = _filter_generated_items(req, response.items)
+    response.reply = _align_reply_with_items(_filter_generated_reply(req, response.reply), response.items)
     return response
 
 
