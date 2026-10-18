@@ -1,8 +1,8 @@
 /** County forecast points live in the map's geographic coordinate system. */
 import { useEffect, useRef, useState } from "react";
-import * as maptilersdk from "@maptiler/sdk";
+import mapboxgl from "mapbox-gl";
 import type { FeatureCollection, Point } from "geojson";
-import "@maptiler/sdk/dist/maptiler-sdk.css";
+import "mapbox-gl/dist/mapbox-gl.css";
 import type { CountyForecast } from "./types";
 import { buildDemoForecast, fetchForecast } from "./api";
 
@@ -23,14 +23,16 @@ const COUNTIES: Record<string, { name: string; lat: number; lon: number }> = {
 const FIPS_LIST = Object.keys(COUNTIES);
 const SOURCE = "county-risk";
 const CLICK_LAYERS = ["county-risk-dots", "county-risk-values", "county-risk-names"];
+// Carbon Design System's Gray 10 Mapbox style matches the app's g10 theme.
+const CARBON_G10_STYLE = "mapbox://styles/carbondesignsystem/ck7c8ce1y05h61ipb2fixfe76";
 type WindowKey = "next_24h" | "next_24_48h" | "next_48_72h";
 
 function color(p: number | null): string {
   if (p === null) return "#8d8d8d";
   if (p < 0.35) return "#198038";
   if (p < 0.60) return "#b28600";
-  if (p < 0.80) return "#da6300";
-  return "#a2191f";
+  if (p < 0.80) return "#ff832b";
+  return "#da1e28";
 }
 
 function points(forecasts: Record<string, CountyForecast>, activeFips: string, window: WindowKey): FeatureCollection<Point> {
@@ -64,11 +66,11 @@ interface Props {
 
 export default function CountyRiskMap({ activeFips, activeWindow, onSelectFips, activeForecast }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<maptilersdk.Map | null>(null);
+  const mapRef = useRef<mapboxgl.Map | null>(null);
   const latest = useRef({ activeFips, activeWindow, onSelectFips, forecasts: {} as Record<string, CountyForecast> });
   const previousFips = useRef(activeFips);
   const [forecasts, setForecasts] = useState<Record<string, CountyForecast>>({});
-  const apiKey = (import.meta.env.VITE_MAPTILER_API_KEY as string | undefined) || "";
+  const accessToken = (import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined) || "";
   latest.current = { activeFips, activeWindow, onSelectFips, forecasts };
 
   useEffect(() => {
@@ -90,17 +92,18 @@ export default function CountyRiskMap({ activeFips, activeWindow, onSelectFips, 
   }, [activeFips, activeForecast]);
 
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
-    if (apiKey) maptilersdk.config.apiKey = apiKey;
+    if (!containerRef.current || mapRef.current || !accessToken) return;
     const initial = COUNTIES[latest.current.activeFips] ?? COUNTIES["06037"];
-    const map = new maptilersdk.Map({
+    const map = new mapboxgl.Map({
+      accessToken,
       container: containerRef.current,
-      style: "streets-v2",
+      style: CARBON_G10_STYLE,
       center: initial === COUNTIES["06037"] ? [-117.6, 33.9] : [initial.lon, initial.lat],
       zoom: 6.6,
-      navigationControl: "bottom-right" as unknown as boolean,
-      attributionControl: { compact: true },
+      attributionControl: false,
     });
+    map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "bottom-right");
+    map.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-right");
     mapRef.current = map;
 
     map.once("load", () => {
@@ -156,10 +159,10 @@ export default function CountyRiskMap({ activeFips, activeWindow, onSelectFips, 
       });
     });
     return () => { map.remove(); mapRef.current = null; };
-  }, [apiKey]);
+  }, [accessToken]);
 
   useEffect(() => {
-    const source = mapRef.current?.getSource(SOURCE) as maptilersdk.GeoJSONSource | undefined;
+    const source = mapRef.current?.getSource(SOURCE) as mapboxgl.GeoJSONSource | undefined;
     source?.setData(points(forecasts, activeFips, activeWindow));
   }, [forecasts, activeFips, activeWindow]);
 
@@ -179,15 +182,15 @@ export default function CountyRiskMap({ activeFips, activeWindow, onSelectFips, 
         <p>Outage probability by county — click any marker to switch the forecast view.</p>
       </div>
       <div className="risk-map-canvas">
-        {!apiKey && <div className="risk-map-key-notice">Add <code>VITE_MAPTILER_API_KEY=your_key</code> to <code>.env.local</code> for the MapTiler basemap. Get a free key at <a href="https://www.maptiler.com/cloud/" target="_blank" rel="noreferrer">maptiler.com/cloud</a>.</div>}
+        {!accessToken && <div className="risk-map-key-notice">Add a Mapbox public token as <code>VITE_MAPBOX_ACCESS_TOKEN</code> in <code>.env.development.local</code> to show Carbon’s Gray 10 map.</div>}
         <div ref={containerRef} style={{ height: "440px", width: "100%" }} />
         <div className="risk-map-legend">
           <span className="section-kicker">RISK</span>
           {[
             { label: "Low < 35%", color: "#198038" },
             { label: "Mod 35–60%", color: "#b28600" },
-            { label: "High 60–80%", color: "#da6300" },
-            { label: "Severe > 80%", color: "#a2191f" },
+            { label: "High 60–80%", color: "#ff832b" },
+            { label: "Severe > 80%", color: "#da1e28" },
           ].map(({ label, color }) => <span key={label} className="risk-legend-item"><span className="risk-legend-dot" style={{ background: color }} />{label}</span>)}
           <span className="risk-legend-note">Larger = higher risk · Click to select</span>
         </div>

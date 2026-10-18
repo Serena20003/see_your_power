@@ -3,6 +3,7 @@
 @use '@carbon/styles/scss/zone';
 @use '@carbon/styles/scss/components/button';
 @use '@carbon/styles/scss/components/checkbox';
+@use '@carbon/styles/scss/components/inline-loading';
 @use '@carbon/styles/scss/components/notification';
 @use '@carbon/styles/scss/components/select';
 @use '@carbon/styles/scss/components/skeleton-styles';
@@ -319,7 +320,7 @@ button { cursor: pointer; }
 }
 
 /* =========================================================================
-   County Risk Map — MapTiler geographic layers
+   County Risk Map — Carbon Mapbox geographic layers
    ========================================================================= */
 
 .risk-map-wrap { margin-bottom: 24px; }
@@ -328,9 +329,9 @@ button { cursor: pointer; }
 
 .risk-map-canvas { border: 1px solid #e0e0e0; overflow: hidden; }
 
-/* MapTiler SDK overrides */
-.maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib a { font-size: 9px !important; }
-.maplibregl-ctrl-bottom-right { bottom: 44px; }
+/* Carbon Mapbox controls */
+.mapboxgl-ctrl-attrib, .mapboxgl-ctrl-attrib a { font-size: 9px !important; }
+.mapboxgl-ctrl-bottom-right { bottom: 44px; }
 
 /* No-API-key notice */
 .risk-map-key-notice {
