@@ -407,8 +407,8 @@ Screens to mockup:
 ---
 
 ### Sub-Task 10 — Profile Settings Page
-**Status:** `[ ] pending`
-**Design mockup required:** `[ ] pending approval`
+**Status:** `[x] done`
+**Design mockup required:** `[x] approved`
 Screens to mockup:
 - `/profile` — user info section: email (read-only), first name + last name fields, save button
 - `/profile` — locations section: list of location cards (name, address, default badge, "Set as default" / "Edit" / "Delete" actions), "Add new location" button

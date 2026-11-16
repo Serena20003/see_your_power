@@ -62,6 +62,12 @@ export default function ProfilePage() {
     void refetch();
   }
 
+  // ── Initials ──────────────────────────────────────────────────────────────
+  const initials =
+    profile?.first_name && profile?.last_name
+      ? `${profile.first_name[0]}${profile.last_name[0]}`.toUpperCase()
+      : session?.user?.email?.[0]?.toUpperCase() ?? '?';
+
   return (
     <Theme theme="g10">
       <div className="site-shell">
@@ -74,11 +80,12 @@ export default function ProfilePage() {
             <Button kind="ghost" size="sm" onClick={() => navigate('/')}>
               ← Back to app
             </Button>
+            <span className="avatar" aria-hidden="true">{initials}</span>
           </div>
         </header>
 
         <main style={{ maxWidth: '640px', margin: '0 auto', padding: '2rem 1rem' }}>
-          <h1 style={{ marginBottom: '2rem' }}>Profile settings</h1>
+          <h1 style={{ marginBottom: '2rem' }}>Profile &amp; Settings</h1>
 
           {/* ── User info ─────────────────────────────────────────────── */}
           <Tile style={{ marginBottom: '2rem' }}>
