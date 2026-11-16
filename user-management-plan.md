@@ -43,8 +43,8 @@ src/
   components/          # Shared IBM Carbon styled components
   features/
     auth/
-      components/      # EmailForm, OtpInput
-      authService.ts   # sendOtp(), verifyOtp()
+      components/      # EmailForm (OtpInput removed — magic-link flow)
+      authService.ts   # sendOtp(), verifyOtp(), checkProfileComplete()
     profile/
       components/      # ProfileForm
       profileService.ts  # getProfile(), upsertProfile()
@@ -182,13 +182,12 @@ Screens to mockup:
 
 **Additional requirement (approved after mockup):** Validate email before sending OTP — (1) client-side format check, (2) Abstract API email validation (`emailvalidation.abstractapi.com/v1/`) to block disposable/temporary emails. Add `VITE_ABSTRACT_EMAIL_API_KEY` to `.env.development.local`.
 
-**Intent:** Implement the email OTP login/signup flow. This is the entry point to the entire user system — must be solid before onboarding or dashboard are wired.
+**Intent:** Implement the email login/signup flow. This is the entry point to the entire user system — must be solid before onboarding or dashboard are wired.
 
 **Expected Outcomes:**
-- `LoginPage` renders a two-step form: email input → OTP code input
+- `LoginPage` renders a two-step form: email input → "check your inbox" confirmation
 - `authService.ts` exports `sendOtp(email)` and `verifyOtp(email, token)` using Supabase `signInWithOtp` and `verifyOtp`
-- After successful OTP: check `users` table for profile completeness (first_name + last_name non-null/non-empty) → redirect to `/onboarding` if incomplete, `/` if complete
-- Inline error shown for wrong/expired OTP with a "Resend code" button (re-calls `sendOtp`)
+- After magic link click: `onAuthStateChange` fires `SIGNED_IN` in `LoginPage`; check `users` table for profile completeness → redirect to `/onboarding` if incomplete, `/` if complete
 - Carbon Design System components used for inputs and buttons (consistent with existing UI)
 
 **Todo List:**
@@ -197,6 +196,13 @@ Screens to mockup:
 3. Create `src/features/auth/components/OtpInput.tsx` — Carbon `TextInput` for 6-digit code + "Resend code" link + inline error display
 4. Wire `LoginPage.tsx` — renders `EmailForm` then `OtpInput` on submit; handles redirect logic after verify
 5. Add `signOut()` to `authService.ts` for use in header later
+
+**Fix (post-implementation):** Supabase free tier does not allow editing email templates without custom SMTP, so the default "Magic link or OTP" template sends a magic link (clickable URL), not a 6-digit code. Switched auth flow to magic link:
+- `sendOtp()` now passes `emailRedirectTo: window.location.origin` so the link returns to the correct app origin
+- `LoginPage` step 2 changed from `OtpInput` code entry to a "check your inbox" message
+- `LoginPage` subscribes to `onAuthStateChange('SIGNED_IN')` to detect the redirect and run the profile-complete check → navigate
+- `OtpInput` component retained in the codebase but no longer used by `LoginPage`
+- Supabase dashboard: `http://localhost:5173` must be listed under **Authentication → URL Configuration → Redirect URLs**
 
 **Relevant Context:**
 - Supabase OTP: `supabase.auth.signInWithOtp({ email })` sends the code; `supabase.auth.verifyOtp({ email, token, type: 'email' })` verifies

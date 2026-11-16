@@ -1,47 +1,60 @@
 // src/pages/LoginPage.tsx
-// Two-step email OTP login/signup page.
-// Step 1 — EmailForm: validate + send OTP
-// Step 2 — OtpInput: verify code → redirect based on profile completeness
+// Two-step email magic-link login/signup page.
+// Step 1 — EmailForm: validate + send magic link
+// Step 2 — "check your inbox" confirmation; Supabase redirects back and
+//           onAuthStateChange fires, which triggers navigation here.
+//
+// Error handling: Supabase appends #error=...&error_description=... to the
+// redirectTo URL on failure (e.g. expired link). App.tsx detects this hash
+// and navigates to /login?error=<description> so we can surface it here.
 
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Loading } from '@carbon/react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Loading, InlineNotification } from '@carbon/react';
 import { supabase } from '../lib/supabase/client';
 import { checkProfileComplete } from '../features/auth/authService';
 import EmailForm from '../features/auth/components/EmailForm';
-import OtpInput from '../features/auth/components/OtpInput';
-import type { AuthResponse } from '@supabase/supabase-js';
 
-type Step = 'email' | 'otp' | 'redirecting';
+type Step = 'email' | 'sent' | 'redirecting';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
 
-  // If the user already has an active session, send them straight to the app.
+  // Error forwarded from the Supabase redirect hash (via App.tsx → navigate).
+  const linkError = searchParams.get('error');
+
+  // Handle both: existing session on mount AND the magic-link redirect
+  // (which fires onAuthStateChange with SIGNED_IN).
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) navigate('/');
+    // Check for an already-active session (e.g. user revisits while logged in).
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session) {
+        setStep('redirecting');
+        const isComplete = await checkProfileComplete(session.user.id);
+        navigate(isComplete ? '/' : '/onboarding');
+      }
     });
+
+    // Listen for the SIGNED_IN event that fires when the magic link is clicked.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+          setStep('redirecting');
+          const isComplete = await checkProfileComplete(session.user.id);
+          navigate(isComplete ? '/' : '/onboarding');
+        }
+      },
+    );
+
+    return () => { subscription.unsubscribe(); };
   }, [navigate]);
 
-  function handleOtpSent(sentEmail: string) {
+  function handleLinkSent(sentEmail: string) {
     setEmail(sentEmail);
-    setStep('otp');
-  }
-
-  async function handleVerified(result: AuthResponse) {
-    const userId = result.data?.user?.id;
-    if (!userId) {
-      // Should not happen — verifyOtp succeeded, so user must exist.
-      navigate('/');
-      return;
-    }
-
-    setStep('redirecting');
-    const isComplete = await checkProfileComplete(userId);
-    navigate(isComplete ? '/' : '/onboarding');
+    setStep('sent');
   }
 
   if (step === 'redirecting') {
@@ -56,26 +69,41 @@ export default function LoginPage() {
     <div style={pageStyle}>
       <div style={cardStyle}>
         <h1 style={headingStyle}>Log in / Sign up</h1>
-        <p style={subheadStyle}>
-          {step === 'email'
-            ? 'Enter your email to receive a one-time sign-in code.'
-            : 'Enter the code we sent to your inbox.'}
-        </p>
 
-        {step === 'email' && <EmailForm onOtpSent={handleOtpSent} />}
-
-        {step === 'otp' && (
-          <OtpInput email={email} onVerified={handleVerified} />
+        {linkError && (
+          <InlineNotification
+            kind="error"
+            title="Sign-in link expired"
+            subtitle="That link has already been used or has expired. Request a new one below."
+            lowContrast
+            hideCloseButton
+            style={{ marginBottom: '1rem' }}
+          />
         )}
 
-        {step === 'otp' && (
-          <button
-            type="button"
-            onClick={() => setStep('email')}
-            style={backLinkStyle}
-          >
-            ← Use a different email
-          </button>
+        {step === 'email' && (
+          <>
+            <p style={subheadStyle}>
+              Enter your email to receive a one-time sign-in link.
+            </p>
+            <EmailForm onOtpSent={handleLinkSent} />
+          </>
+        )}
+
+        {step === 'sent' && (
+          <>
+            <p style={subheadStyle}>
+              We sent a sign-in link to <strong>{email}</strong>. Click the
+              link in your inbox to continue — you can close this tab.
+            </p>
+            <button
+              type="button"
+              onClick={() => setStep('email')}
+              style={backLinkStyle}
+            >
+              ← Use a different email
+            </button>
+          </>
         )}
       </div>
     </div>

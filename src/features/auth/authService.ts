@@ -57,9 +57,15 @@ export async function validateEmail(email: string): Promise<EmailValidationResul
 
 // ─── Supabase OTP ─────────────────────────────────────────────────────────────
 
-/** Sends an OTP to the given email via Supabase magic-link/OTP. */
+/** Sends a magic-link sign-in email via Supabase. */
 export async function sendOtp(email: string) {
-  return supabase.auth.signInWithOtp({ email: email.trim() });
+  return supabase.auth.signInWithOtp({
+    email: email.trim(),
+    options: {
+      shouldCreateUser: true,
+      emailRedirectTo: window.location.origin,
+    },
+  });
 }
 
 /** Verifies the 6-digit OTP code entered by the user. */

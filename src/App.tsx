@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button, Checkbox, InlineLoading, Tag, Theme, Tile } from "@carbon/react";
 import { ArrowRight, Chat, Flash, Send, SettingsAdjust } from "@carbon/icons-react";
 import { Link } from "react-router-dom";
@@ -174,6 +174,18 @@ function AssistantPanel({
 
 export default function App() {
   const { session, profile: userProfile } = useAuth();
+
+  // Supabase appends #error=access_denied&error_description=... to the redirect
+  // URL when a magic link is invalid or expired. Detect it on mount and forward
+  // the user to /login so they see a proper error message.
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.includes('error=')) {
+      window.history.replaceState(null, '', window.location.pathname);
+      window.location.replace('/login?error=1');
+    }
+  }, []);
+
   const initials =
     session && userProfile?.first_name && userProfile?.last_name
       ? `${userProfile.first_name[0]}${userProfile.last_name[0]}`.toUpperCase()
