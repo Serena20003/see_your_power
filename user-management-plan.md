@@ -268,8 +268,8 @@ Screens to mockup:
 ---
 
 ### Sub-Task 6 — Device Survey UI (Shared Component)
-**Status:** `[ ] pending`
-**Design mockup required:** `[ ] pending approval`
+**Status:** `[x] done`
+**Design mockup required:** `[x] approved`
 Screens to mockup:
 - `DeviceSurvey` — empty state: quick-add suggestion chips (7 device types), "Add device" button
 - `DeviceSurvey` — adding a device: inline row appears with name text input + count number input + confirm/cancel

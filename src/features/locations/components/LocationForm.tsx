@@ -1,6 +1,5 @@
 // src/features/locations/components/LocationForm.tsx
 // Carbon form for creating or editing a location.
-// DeviceSurvey will be integrated here in Sub-Task 6.
 
 import { useState } from 'react';
 import {
@@ -12,7 +11,8 @@ import {
 } from '@carbon/react';
 import { geocodeAddress } from '../../../lib/mapbox/geocode';
 import { createLocation, updateLocation } from '../locationService';
-import type { Location } from '../../../types/database';
+import type { ElectronicItem, Location } from '../../../types/database';
+import DeviceSurvey from '../../../components/DeviceSurvey';
 
 export interface LocationFormProps {
   initialData?: Partial<Location>;
@@ -40,6 +40,10 @@ export default function LocationForm({
     address: initialData?.address ?? '',
     additional_notes: initialData?.additional_notes ?? '',
   });
+
+  const [electronicItems, setElectronicItems] = useState<ElectronicItem[]>(
+    initialData?.electronic_items ?? [],
+  );
 
   const [addressError, setAddressError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -85,8 +89,7 @@ export default function LocationForm({
         lat: geocoded.lat,
         lon: geocoded.lon,
         fips_code: geocoded.fips_code ?? null,
-        // electronic_items carries over from initialData on edit, stays empty on create
-        electronic_items: initialData?.electronic_items ?? [],
+        electronic_items: electronicItems,
       };
 
       let saved: Location;
@@ -158,12 +161,7 @@ export default function LocationForm({
           rows={2}
         />
 
-        {/* ── Device survey placeholder ───────────────────────────────────
-            DeviceSurvey will be integrated here in Sub-Task 6.
-        ──────────────────────────────────────────────────────────────────── */}
-        <div data-placeholder="device-survey">
-          {/* Sub-Task 6: replace this div with <DeviceSurvey /> */}
-        </div>
+        <DeviceSurvey items={electronicItems} onChange={setElectronicItems} />
 
         <div style={{ display: 'flex', gap: '0.75rem' }}>
           <Button type="submit" disabled={saving}>
