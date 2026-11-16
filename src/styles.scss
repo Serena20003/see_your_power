@@ -383,3 +383,113 @@ button { cursor: pointer; }
   .risk-map-legend { gap: 10px; font-size: 10px; }
   .risk-legend-note { display: none; }
 }
+
+/* =========================================================================
+   Location picker overlay — Carbon Select inside the map overlay
+   ========================================================================= */
+
+/* Wraps the Carbon Select; sits above the address search form in the overlay */
+.map-location-select { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.18); }
+.map-location-select .cds--select { width: 220px; }
+.map-location-select .cds--select-input { height: 40px; min-height: 40px; border-bottom: none; padding-right: 2.5rem; }
+.map-location-select .cds--select__arrow { top: 50%; transform: translateY(-50%); }
+
+/* =========================================================================
+   Plan section — full-width area below the forecast panel
+   ========================================================================= */
+
+.plan-section { padding: 0 0 42px; }
+
+/* =========================================================================
+   Assistant FAB — circular fixed button bottom-right
+   ========================================================================= */
+
+.assistant-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 0;
+  background: #0f62fe;
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(0,0,0,.24);
+  cursor: pointer;
+  transition: background .15s ease, box-shadow .15s ease;
+}
+.assistant-fab:hover { background: #0043ce; box-shadow: 0 6px 20px rgba(0,0,0,.30); }
+.assistant-fab:focus-visible { outline: 2px solid #0f62fe; outline-offset: 3px; }
+
+/* =========================================================================
+   Assistant drawer — fixed panel bottom-right, overlays the page
+   ========================================================================= */
+
+.assistant-drawer {
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  z-index: 999;
+  width: 380px;
+  height: 500px;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  box-shadow: -4px 0 24px rgba(0,0,0,.18), 0 -2px 12px rgba(0,0,0,.10);
+}
+
+/* Blue header bar with title + close button */
+.assistant-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  height: 44px;
+  flex: none;
+  background: #0f62fe;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .10em;
+}
+.assistant-drawer-close {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  border-radius: 2px;
+}
+.assistant-drawer-close:hover { background: rgba(255,255,255,.18); }
+.assistant-drawer-close:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+
+/* Scrollable chat feed area */
+.assistant-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 12px;
+  background: #f4f4f4;
+}
+
+/* Input + send row */
+.assistant-drawer-footer {
+  flex: none;
+  padding: 10px 12px;
+  border-top: 1px solid #e0e0e0;
+  background: #fff;
+}
+.assistant-drawer-footer .chat-form { gap: 6px; }
+
+@media (max-width: 600px) {
+  .assistant-drawer { width: 100%; right: 0; height: 420px; }
+  .assistant-fab { bottom: 16px; right: 16px; width: 46px; height: 46px; }
+}

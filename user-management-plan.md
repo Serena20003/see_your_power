@@ -372,12 +372,14 @@ Screens to mockup:
 ---
 
 ### Sub-Task 9 — Authenticated Dashboard Wiring
-**Status:** `[ ] pending`
-**Design mockup required:** `[ ] pending approval`
+**Status:** `[x] done`
+**Design mockup required:** `[x] approved`
 Screens to mockup:
 - `/` authenticated: full layout — header (logo, locations dropdown, address search bar, greeting "Hello [name]", initials circle), map (centered on default location), forecast panel, plan panel, assistant panel
 - Locations dropdown open: list of saved location names, currently selected highlighted
 - Transition arrows: "Select saved location" → map flies to location lat/lon + plan updates; "Submit address search" → map re-centers only (plan stays on selected location); "Click initials circle" → `/profile`
+
+**Additional requirement (approved after mockup):** Assistant moved to a floating action button (FAB) bottom-right that opens a chat drawer/popover overlay. Plan panel has full vertical space with no height cap.
 
 **Intent:** Wire the full logged-in experience: location selector drives the plan and assistant, greeting uses real user name, assistant can mutate electronic devices, map flies to selected location's coordinates.
 
