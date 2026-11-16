@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 import { Button, Checkbox, InlineLoading, Tag, Theme, Tile } from "@carbon/react";
 import { ArrowRight, Chat, Flash, Send, SettingsAdjust } from "@carbon/icons-react";
+import { Link } from "react-router-dom";
 import ForecastPanel from "./ForecastPanel";
 import { createPlan, initialProfile, profileChoices, type PlanItem, type Profile, type ProfileKey } from "./mockModel";
 import { fetchPlan, type ApiPlanItem } from "./api";
+import { useAuth } from "./lib/supabase/AuthContext";
 
 type ChatMessage = { role: "assistant" | "user"; text: string };
 type FactSource = "sample" | "interview" | "chat" | "edited";
@@ -171,6 +173,11 @@ function AssistantPanel({
 }
 
 export default function App() {
+  const { session, profile: userProfile } = useAuth();
+  const initials =
+    session && userProfile?.first_name && userProfile?.last_name
+      ? `${userProfile.first_name[0]}${userProfile.last_name[0]}`.toUpperCase()
+      : null;
   // County FIPS — default to Los Angeles for the demo
   const [fips, setFips] = useState("06037");
 
@@ -225,15 +232,23 @@ export default function App() {
           </nav>
           <div className="header-right">
             <a className="header-model-link" href="/model-sources">Model sources ↗</a>
-            <Tag type="blue" size="sm">Interactive mockup</Tag>
-            <span className="avatar" aria-label="Example resident Rosa">R</span>
+            {initials ? (
+              <Link to="/profile" className="avatar" aria-label="Go to profile" style={{ textDecoration: 'none' }}>
+                {initials}
+              </Link>
+            ) : (
+              <Button kind="ghost" size="sm" onClick={() => { window.location.href = '/login'; }}>
+                Log in / Sign up
+              </Button>
+            )}
           </div>
         </header>
 
         <main>
           <div className="welcome">
-            <span className="welcome-date">SAMPLE RESIDENT · ROSA MARTINEZ</span>
-            <p>Hello, Rosa. Here is what the next few days may mean for your power.</p>
+            {session && userProfile?.first_name && (
+              <p>Hello, {userProfile.first_name}. Here is what the next few days may mean for your power.</p>
+            )}
           </div>
 
           {/* Forecast section — new API-driven panel */}

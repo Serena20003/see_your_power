@@ -206,8 +206,8 @@ Screens to mockup:
 ---
 
 ### Sub-Task 4 — Profile Feature
-**Status:** `[ ] pending`
-**Design mockup required:** `[ ] pending approval`
+**Status:** `[x] done`
+**Design mockup required:** `[x] approved`
 Screens to mockup:
 - Header — logged-out state: "Log in / Sign up" button, no greeting, no avatar circle
 - Header — logged-in state: initials circle (top-right), greeting "Hello, [first name]" visible
