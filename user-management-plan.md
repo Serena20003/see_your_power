@@ -236,8 +236,8 @@ Screens to mockup:
 ---
 
 ### Sub-Task 5 — Locations Feature
-**Status:** `[ ] pending`
-**Design mockup required:** `[ ] pending approval`
+**Status:** `[x] done`
+**Design mockup required:** `[x] approved`
 Screens to mockup:
 - `LocationForm` — create mode: name, description, address, additional notes fields; "Save" button; inline geocode error state
 - `LocationsList` — list of location cards: name, address, default badge, edit/delete actions
