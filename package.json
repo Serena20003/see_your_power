@@ -11,6 +11,7 @@
   "dependencies": {
     "@carbon/icons-react": "^11.90.0",
     "@carbon/react": "^1.118.0",
+    "@supabase/supabase-js": "^2.49.4",
     "mapbox-gl": "^3.33.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
