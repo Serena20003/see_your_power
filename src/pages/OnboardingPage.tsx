@@ -365,7 +365,7 @@ function Step3({ locationCount, onAddAnother, onFinish, saving, saveError }: Ste
 
 export default function OnboardingPage() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, session, signOut } = useAuth();
 
   // ── Redirect guard: profile already complete ──────────────────────────────
   useEffect(() => {
@@ -488,6 +488,20 @@ export default function OnboardingPage() {
             <Link to="/model-sources" className="header-model-link">
               Model sources ↗
             </Link>
+            {session && (
+              <>
+                <span style={{ fontSize: '0.8125rem', color: '#525252' }}>
+                  {session.user.email}
+                </span>
+                <Button
+                  kind="ghost"
+                  size="sm"
+                  onClick={async () => { await signOut(); navigate('/login'); }}
+                >
+                  Sign out
+                </Button>
+              </>
+            )}
           </div>
         </header>
 
