@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Checkbox, InlineLoading, Tag, Theme, Tile } from "@carbon/react";
 import { ArrowRight, Chat, Flash, Send, SettingsAdjust } from "@carbon/icons-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import ForecastPanel from "./ForecastPanel";
 import { createPlan, initialProfile, profileChoices, type PlanItem, type Profile, type ProfileKey } from "./mockModel";
 import { fetchPlan, type ApiPlanItem } from "./api";
@@ -174,17 +174,33 @@ function AssistantPanel({
 
 export default function App() {
   const { session, profile: userProfile } = useAuth();
+  const navigate = useNavigate();
+  const redirectedRef = useRef(false);
 
   // Supabase appends #error=access_denied&error_description=... to the redirect
   // URL when a magic link is invalid or expired. Detect it on mount and forward
   // the user to /login so they see a proper error message.
+  //
+  // Also handle the successful magic-link redirect: if the session exists but
+  // the profile is incomplete, send new users to /onboarding.
   useEffect(() => {
     const hash = window.location.hash;
     if (hash.includes('error=')) {
       window.history.replaceState(null, '', window.location.pathname);
       window.location.replace('/login?error=1');
+      return;
     }
-  }, []);
+
+    // Only run once per mount; skip if no session yet (AuthContext still loading).
+    if (!session || redirectedRef.current) return;
+    redirectedRef.current = true;
+
+    // If the user has no first_name they haven't completed onboarding.
+    const profileIncomplete = !userProfile?.first_name?.trim();
+    if (profileIncomplete) {
+      navigate('/onboarding');
+    }
+  }, [session, userProfile, navigate]);
 
   const initials =
     session && userProfile?.first_name && userProfile?.last_name
