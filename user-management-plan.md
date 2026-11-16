@@ -143,7 +143,7 @@ package.json            # Add @supabase/supabase-js, react-router-dom
 ---
 
 ### Sub-Task 2 — Dependencies & Routing
-**Status:** `[ ] pending`
+**Status:** `[x] done`
 **Design mockup:** not applicable (stub pages only — no visible UI changes)
 
 **Intent:** Wire up React Router and lay the route skeleton so all subsequent page sub-tasks have a home. This commit establishes the navigation architecture without changing any visible UI.
