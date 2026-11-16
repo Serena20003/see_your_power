@@ -173,12 +173,14 @@ package.json            # Add @supabase/supabase-js, react-router-dom
 ---
 
 ### Sub-Task 3 — Auth Feature
-**Status:** `[ ] pending`
-**Design mockup required:** `[ ] pending approval`
+**Status:** `[x] done`
+**Design mockup required:** `[x] approved`
 Screens to mockup:
 - `/login` — Step 1: email entry form (header with login button, centered card, email input, submit)
 - `/login` — Step 2: OTP code entry (same card, code input, inline error state, resend link)
 - Transition arrows: "Submit email" → Step 2; "Wrong code" → inline error; "Resend code" → clears input + success note; "Correct code + complete profile" → `/`; "Correct code + incomplete profile" → `/onboarding`
+
+**Additional requirement (approved after mockup):** Validate email before sending OTP — (1) client-side format check, (2) Abstract API email validation (`emailvalidation.abstractapi.com/v1/`) to block disposable/temporary emails. Add `VITE_ABSTRACT_EMAIL_API_KEY` to `.env.development.local`.
 
 **Intent:** Implement the email OTP login/signup flow. This is the entry point to the entire user system — must be solid before onboarding or dashboard are wired.
 
@@ -440,3 +442,4 @@ Screens to mockup:
 - **`fips_code`** on locations is populated as a best-effort from Mapbox reverse geocoding; no plan or forecast logic hard-depends on it
 - **`mockModel.ts`** is deleted in Sub-Task 8; ensure no imports remain before deletion
 - Each sub-task should result in a **compilable, runnable commit** — no broken intermediate states
+- **Abstract API email validation:** Only 100 credits available. Never call the Abstract API in tests, dev smoke tests, or any automated context. It is called only in real user-initiated login flows. No test code should import or invoke `validateEmail()`.
