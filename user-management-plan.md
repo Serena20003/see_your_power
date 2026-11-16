@@ -339,8 +339,8 @@ Screens to mockup:
 ---
 
 ### Sub-Task 8 — Unauthenticated App View
-**Status:** `[ ] pending`
-**Design mockup required:** `[ ] pending approval`
+**Status:** `[x] done`
+**Design mockup required:** `[x] approved`
 Screens to mockup:
 - `/` unauthenticated: full layout — header (logo, address search bar, "Log in / Sign up" button), map (centered LA County), forecast panel; plan + assistant panels absent
 - Address search interaction: search bar focused → user types address → "Search" action → map flies to result

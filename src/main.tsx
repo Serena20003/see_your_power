@@ -1,7 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import App from "./App";
+import AppPage from "./pages/AppPage";
 import ModelSources from "./ModelSources";
 import ProtectedRoute from "./components/ProtectedRoute";
 import LoginPage from "./pages/LoginPage";
@@ -16,7 +16,7 @@ createRoot(document.getElementById("root")!).render(
       <AuthProvider>
         <Routes>
           {/* Public routes */}
-          <Route path="/" element={<App />} />
+          <Route path="/" element={<AppPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/model-sources" element={<ModelSources />} />
 

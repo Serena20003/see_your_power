@@ -259,9 +259,10 @@ function ForecastError({ message, onRetry }: { message: string; onRetry: () => v
 interface ForecastPanelProps {
   fips: string;
   onFipsChange: (fips: string) => void;
+  flyToCoords?: { lat: number; lon: number } | null;
 }
 
-export default function ForecastPanel({ fips, onFipsChange }: ForecastPanelProps) {
+export default function ForecastPanel({ fips, onFipsChange, flyToCoords }: ForecastPanelProps) {
   const { state, refetch } = useForecast(fips);
   const [activeWindow, setActiveWindow] =
     useState<typeof WINDOW_KEYS[number]>("next_24h");
@@ -301,6 +302,7 @@ export default function ForecastPanel({ fips, onFipsChange }: ForecastPanelProps
         activeWindow={activeWindow}
         onSelectFips={onFipsChange}
         activeForecast={forecast}
+        flyToCoords={flyToCoords}
       />
 
       {/* Window tabs */}

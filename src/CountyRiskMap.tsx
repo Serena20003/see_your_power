@@ -87,12 +87,14 @@ interface Props {
   activeWindow:   WindowKey;
   onSelectFips:   (fips: string) => void;
   activeForecast: CountyForecast | null;
+  /** When set (and non-null), fly the map to these coordinates at zoom 11. */
+  flyToCoords?:   { lat: number; lon: number } | null;
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
 
 export default function CountyRiskMap({
-  activeFips, activeWindow, onSelectFips, activeForecast,
+  activeFips, activeWindow, onSelectFips, activeForecast, flyToCoords,
 }: Props) {
   const containerRef  = useRef<HTMLDivElement>(null);
   const mapRef        = useRef<mapboxgl.Map | null>(null);
@@ -264,6 +266,15 @@ export default function CountyRiskMap({
       map.flyTo({ center: [county.lon, county.lat], zoom: Math.max(map.getZoom(), 6.6), duration: 700 });
     }
   }, [activeFips]);
+
+  // ── Fly to address-search result ──────────────────────────────────────────
+  useEffect(() => {
+    if (!flyToCoords) return;
+    const map = mapRef.current;
+    if (map) {
+      map.flyTo({ center: [flyToCoords.lon, flyToCoords.lat], zoom: 11, duration: 700 });
+    }
+  }, [flyToCoords]);
 
   const windowLabel = activeWindow === "next_24h" ? "NEXT 24H"
                     : activeWindow === "next_24_48h" ? "24–48H" : "48–72H";
