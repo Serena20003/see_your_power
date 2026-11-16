@@ -19,7 +19,6 @@ import {
   Tile,
 } from "@carbon/react";
 import { ArrowRight, CloudMonitoring, WarningAlt } from "@carbon/icons-react";
-import CountySelector from "./CountySelector";
 import CountyRiskMap from "./CountyRiskMap";
 import { useForecast } from "./useForecast";
 import { formatForecastAge, formatProbability, statusBadgeText } from "./api";
@@ -260,9 +259,11 @@ interface ForecastPanelProps {
   fips: string;
   onFipsChange: (fips: string) => void;
   flyToCoords?: { lat: number; lon: number } | null;
+  /** Overlay rendered inside the map canvas (search bar, location picker). */
+  mapOverlay?: React.ReactNode;
 }
 
-export default function ForecastPanel({ fips, onFipsChange, flyToCoords }: ForecastPanelProps) {
+export default function ForecastPanel({ fips, onFipsChange, flyToCoords, mapOverlay }: ForecastPanelProps) {
   const { state, refetch } = useForecast(fips);
   const [activeWindow, setActiveWindow] =
     useState<typeof WINDOW_KEYS[number]>("next_24h");
@@ -274,19 +275,7 @@ export default function ForecastPanel({ fips, onFipsChange, flyToCoords }: Forec
 
   return (
     <section className="forecast-section" aria-labelledby="forecast-title">
-      <div className="forecast-heading">
-        <div>
-          <span className="section-kicker">COUNTY FORECAST</span>
-          <h1 id="forecast-title">Your power forecast</h1>
-          <p>
-            Estimated chance of a new unplanned outage anywhere in the selected
-            county, for each 24-hour window.
-          </p>
-        </div>
-        <CountySelector value={fips} onChange={onFipsChange} />
-      </div>
-
-      {/* Stale banner */}
+      {/* Stale banner — full width above the two-column grid */}
       {isStale && (
         <InlineNotification
           kind="warning"
@@ -296,60 +285,79 @@ export default function ForecastPanel({ fips, onFipsChange, flyToCoords }: Forec
         />
       )}
 
-      {/* County risk map — always shown, synced to active window */}
-      <CountyRiskMap
-        activeFips={fips}
-        activeWindow={activeWindow}
-        onSelectFips={onFipsChange}
-        activeForecast={forecast}
-        flyToCoords={flyToCoords}
-      />
-
-      {/* Window tabs */}
-      {forecast && (
-        <WindowTabs
-          forecast={forecast}
-          activeKey={activeWindow}
-          onSelect={setActiveWindow}
-        />
-      )}
-
-      {/* Main card */}
-      {isLoading && <ForecastSkeleton />}
-      {state.phase === "error" && (
-        <ForecastError message={state.message} onRetry={refetch} />
-      )}
-      {forecast && (
-        <ForecastCard
-          forecast={forecast}
-          windowKey={activeWindow}
-          isStale={isStale}
-        />
-      )}
-
-      {/* How it works accordion */}
-      <details className="model-flow">
-        <summary>How this forecast becomes your plan</summary>
-        <div>
-          <p>
-            <strong>Verified inputs</strong> — NOAA GFS weather forecasts, NWS
-            alerts, USGS canopy and terrain, and verified unplanned outage history
-            (planned and PSPS excluded).
-          </p>
-          <ArrowRight size={18} aria-hidden="true" />
-          <p>
-            <strong>Prediction model</strong> — county-level gradient-boosted
-            onset model, calibrated per window. Counties without local history
-            receive a transferred estimate or an insufficient-data state.
-          </p>
-          <ArrowRight size={18} aria-hidden="true" />
-          <p>
-            <strong>Your plan</strong> — forecast conditions combined with your
-            household answers. Planned outages and PSPS notices appear separately
-            and never enter the model.
-          </p>
+      <div className="forecast-layout">
+        {/* LEFT: map — always shown, synced to active window */}
+        <div className="forecast-map-col">
+          <CountyRiskMap
+            activeFips={fips}
+            activeWindow={activeWindow}
+            onSelectFips={onFipsChange}
+            activeForecast={forecast}
+            flyToCoords={flyToCoords}
+            mapOverlay={mapOverlay}
+          />
         </div>
-      </details>
+
+        {/* RIGHT: heading + tabs + card */}
+        <div className="forecast-detail-col">
+          <div className="forecast-heading">
+            <div>
+              <span className="section-kicker">COUNTY FORECAST</span>
+              <h1 id="forecast-title">Your power forecast</h1>
+              <p>
+                Estimated chance of a new unplanned outage anywhere in the
+                selected county, for each 24-hour window.
+              </p>
+            </div>
+          </div>
+
+          {/* Window tabs */}
+          {forecast && (
+            <WindowTabs
+              forecast={forecast}
+              activeKey={activeWindow}
+              onSelect={setActiveWindow}
+            />
+          )}
+
+          {/* Main card */}
+          {isLoading && <ForecastSkeleton />}
+          {state.phase === "error" && (
+            <ForecastError message={state.message} onRetry={refetch} />
+          )}
+          {forecast && (
+            <ForecastCard
+              forecast={forecast}
+              windowKey={activeWindow}
+              isStale={isStale}
+            />
+          )}
+
+          {/* How it works accordion */}
+          <details className="model-flow" style={{ padding: "0 24px" }}>
+            <summary>How this forecast becomes your plan</summary>
+            <div>
+              <p>
+                <strong>Verified inputs</strong> — NOAA GFS weather forecasts, NWS
+                alerts, USGS canopy and terrain, and verified unplanned outage history
+                (planned and PSPS excluded).
+              </p>
+              <ArrowRight size={18} aria-hidden="true" />
+              <p>
+                <strong>Prediction model</strong> — county-level gradient-boosted
+                onset model, calibrated per window. Counties without local history
+                receive a transferred estimate or an insufficient-data state.
+              </p>
+              <ArrowRight size={18} aria-hidden="true" />
+              <p>
+                <strong>Your plan</strong> — forecast conditions combined with your
+                household answers. Planned outages and PSPS notices appear separately
+                and never enter the model.
+              </p>
+            </div>
+          </details>
+        </div>
+      </div>
     </section>
   );
 }

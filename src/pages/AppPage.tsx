@@ -66,6 +66,32 @@ export default function AppPage() {
     }
   }
 
+  const mapOverlay = (
+    <form className="map-search-overlay" onSubmit={handleAddressSearch} role="search" aria-label="Search address">
+      <TextInput
+        id="map-address-input"
+        labelText="Search address or zip code"
+        hideLabel
+        placeholder="Search address or zip code…"
+        value={addressInput}
+        onChange={(e) => setAddressInput(e.target.value)}
+        disabled={geocoding}
+        invalid={!!geocodeError}
+        invalidText={geocodeError ?? undefined}
+        size="sm"
+      />
+      <Button
+        type="submit"
+        kind="primary"
+        size="sm"
+        renderIcon={Search}
+        iconDescription="Search"
+        hasIconOnly
+        disabled={geocoding || !addressInput.trim()}
+      />
+    </form>
+  );
+
   return (
     <Theme theme="g10">
       <div className="site-shell">
@@ -74,29 +100,6 @@ export default function AppPage() {
             <span className="brand-mark"><Flash size={20} /></span>
             <span>runway<span className="brand-period">.</span></span>
           </div>
-          <form className="header-address-search" onSubmit={handleAddressSearch} role="search" aria-label="Address search">
-            <TextInput
-              id="header-address-input"
-              labelText=""
-              hideLabel
-              placeholder="Search address or zip code…"
-              value={addressInput}
-              onChange={(e) => setAddressInput(e.target.value)}
-              disabled={geocoding}
-              invalid={!!geocodeError}
-              invalidText={geocodeError ?? undefined}
-              size="sm"
-            />
-            <Button
-              type="submit"
-              kind="ghost"
-              size="sm"
-              renderIcon={Search}
-              iconDescription="Search"
-              hasIconOnly
-              disabled={geocoding || !addressInput.trim()}
-            />
-          </form>
           <div className="header-right">
             <a className="header-model-link" href="/model-sources">Model sources ↗</a>
             {initials ? (
@@ -120,7 +123,7 @@ export default function AppPage() {
 
           {/* Forecast section */}
           <div id="forecast">
-            <ForecastPanel fips={fips} onFipsChange={setFips} flyToCoords={flyToCoords} />
+            <ForecastPanel fips={fips} onFipsChange={setFips} flyToCoords={flyToCoords} mapOverlay={mapOverlay} />
           </div>
 
           {/* Plan panel — wired in sub-task 9 */}

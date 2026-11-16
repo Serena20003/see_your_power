@@ -89,12 +89,14 @@ interface Props {
   activeForecast: CountyForecast | null;
   /** When set (and non-null), fly the map to these coordinates at zoom 11. */
   flyToCoords?:   { lat: number; lon: number } | null;
+  /** Rendered as an absolutely-positioned overlay inside the map canvas (top-left). */
+  mapOverlay?:    React.ReactNode;
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
 
 export default function CountyRiskMap({
-  activeFips, activeWindow, onSelectFips, activeForecast, flyToCoords,
+  activeFips, activeWindow, onSelectFips, activeForecast, flyToCoords, mapOverlay,
 }: Props) {
   const containerRef  = useRef<HTMLDivElement>(null);
   const mapRef        = useRef<mapboxgl.Map | null>(null);
@@ -292,6 +294,9 @@ export default function CountyRiskMap({
           </div>
         )}
         <div ref={containerRef} style={{ height: "440px", width: "100%" }} />
+        {mapOverlay && (
+          <div className="risk-map-overlay">{mapOverlay}</div>
+        )}
         <div className="risk-map-legend">
           <span className="section-kicker">RISK</span>
           {([
