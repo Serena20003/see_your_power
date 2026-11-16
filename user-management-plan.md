@@ -298,8 +298,8 @@ Screens to mockup:
 ---
 
 ### Sub-Task 7 — Onboarding Flow
-**Status:** `[ ] pending`
-**Design mockup required:** `[ ] pending approval`
+**Status:** `[x] done`
+**Design mockup required:** `[x] approved`
 Screens to mockup:
 - `/onboarding` Step 1: first name + last name fields, progress indicator at step 1 of 3, "Next" button
 - `/onboarding` Step 2: location form (name, description, address, DeviceSurvey), progress indicator at step 2, "Back" / "Next" buttons
