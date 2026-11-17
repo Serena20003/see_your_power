@@ -1,0 +1,9 @@
+{
+  "grid": {"grid_id": "conus-0125-v1"},
+  "lookback_hours": 5,
+  "concurrency": 4,
+  "retries": 3,
+  "source_catalog": null,
+  "static_manifest": null,
+  "risk_config": "environmental-heuristic-v2.json"
+}
