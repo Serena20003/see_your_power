@@ -1,0 +1,10 @@
+{
+  "batch_id": "bca954e59e6da96a059e0fd28b905a44",
+  "fixture": true,
+  "weather_recipe_version": "weather-normalization-v3",
+  "weather_files": 72,
+  "risk_files": 72,
+  "supporting_files": 5,
+  "published_output_bytes": 267336,
+  "manifest_key": "raster/v1/runs/bca954e59e6da96a059e0fd28b905a44/manifest.json"
+}
