@@ -14,35 +14,10 @@ import { Link, useNavigate } from "react-router-dom";
 import ForecastPanel from "../ForecastPanel";
 import { useAuth } from "../lib/supabase/AuthContext";
 import { useLocations } from "../features/locations/useLocations";
-import { updateLocation } from "../features/locations/locationService";
 import { geocodeAddress } from "../lib/mapbox/geocode";
-import { fetchPlan, fetchPlan as fetchPlanAPI } from "../api";
-import type { ApiPlanItem, PlanRequestPayload } from "../api";
-import type { ElectronicItem, Location } from "../types/database";
-
-// ─── Device-name → API DeviceType mapping ────────────────────────────────────
-
-function itemsToDevices(items: ElectronicItem[]): string[] {
-  const devices: string[] = [];
-  for (const item of items) {
-    const n = item.name.toLowerCase();
-    if (n.includes("oxygen")) devices.push("oxygen_concentrator");
-    else if (n.includes("insulin")) devices.push("insulin_fridge");
-    else if (n.includes("cpap") || n.includes("bipap")) devices.push("cpap");
-    else if (n.includes("dialysis")) devices.push("home_dialysis");
-    else if (n.includes("wheelchair")) devices.push("power_wheelchair");
-    // EV / electric vehicle → hasEV flag only, not a device string
-  }
-  return devices;
-}
-
-function itemsHasEV(items: ElectronicItem[]): boolean {
-  return items.some((i) => {
-    const n = i.name.toLowerCase();
-    return n.includes("ev") || n.includes("electric vehicle");
-  });
-}
-
+import { fetchHouseholdState, initializeHouseholdPlan, sendHouseholdChat, saveActionCompletion } from "../api";
+import type { ApiPlanItem, HouseholdState } from "../api";
+import type { HouseholdAction, Location } from "../types/database";
 // ─── When-label formatting ────────────────────────────────────────────────────
 
 function whenLabel(when: ApiPlanItem["when"]): string {
@@ -99,6 +74,10 @@ export default function AppPage() {
   // ── Locations ─────────────────────────────────────────────────────────────
   const { locations, defaultLocation, loading: locLoading, refetch: refetchLocations } = useLocations();
   const [activeLocation, setActiveLocation] = useState<Location | null>(null);
+  const [completionSaving, setCompletionSaving] = useState(false);
+  const [chatSending, setChatSending] = useState(false);
+  const activeLocationIdRef = useRef<string | null>(null);
+  activeLocationIdRef.current = activeLocation?.id ?? null;
 
   // Load default location on mount (once locations are fetched)
   useEffect(() => {
@@ -150,12 +129,12 @@ export default function AppPage() {
           hideLabel
           size="sm"
           value={activeLocation?.id ?? ""}
+          disabled={chatSending || completionSaving}
           onChange={(e) => {
             const loc = locations.find((l) => l.id === e.target.value) ?? null;
             if (loc) {
               setActiveLocation(loc);
               setPlanItems([]);
-              setCheckedItems({});
             }
           }}
         >
@@ -200,79 +179,75 @@ export default function AppPage() {
     </>
   );
 
-  // ── Plan panel state ───────────────────────────────────────────────────────
-  const [planItems, setPlanItems] = useState<ApiPlanItem[]>([]);
-  const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
+  // ── Persisted plan and completion state ────────────────────────────────────
+  const [planItems, setPlanItems] = useState<HouseholdAction[]>([]);
+  const [planRevision, setPlanRevision] = useState(0);
   const [planLoading, setPlanLoading] = useState(false);
   const [planError, setPlanError] = useState<string | null>(null);
-  // Track which location id the plan was last generated for
-  const planLocationRef = useRef<string | null>(null);
+  const loadGeneration = useRef(0);
 
-  // Fetch plan whenever activeLocation changes (or its electronic_items change)
-  const activeForecastRef = useRef<{ probability: number; primaryCause?: string } | null>(null);
-
-  async function loadPlan(loc: Location) {
-    if (!loc.electronic_items?.length) {
-      setPlanItems([]);
-      return;
-    }
-    setPlanLoading(true);
-    setPlanError(null);
-    try {
-      const devices = itemsToDevices(loc.electronic_items);
-      const hasEV = itemsHasEV(loc.electronic_items);
-      const payload: PlanRequestPayload = {
-        message: "Generate my outage preparation plan.",
-        resident: {
-          name: userProfile?.first_name ?? "Resident",
-          devices,
-          hasEV,
-          livesAlone: false,
-          language: "en",
-        },
-        forecast: {
-          probability: activeForecastRef.current?.probability ?? 0.5,
-          primaryCause: activeForecastRef.current?.primaryCause ?? "wind",
-        },
-      };
-      const resp = await fetchPlanAPI(payload);
-      setPlanItems(resp.items ?? []);
-      // Reset checked state when items are refreshed
-      setCheckedItems({});
-    } catch (err) {
-      setPlanError(err instanceof Error ? err.message : "Could not load plan.");
-    } finally {
-      setPlanLoading(false);
-    }
+  function acceptHouseholdState(saved: HouseholdState) {
+    if (activeLocationIdRef.current !== saved.location_id) return;
+    setPlanItems(saved.plan_items);
+    setPlanRevision(saved.revision);
+    setActiveLocation((loc) => loc?.id === saved.location_id ? {
+      ...loc, electronic_items: saved.electronic_items,
+      plan_items: saved.plan_items, assistant_revision: saved.revision,
+    } : loc);
   }
 
   useEffect(() => {
-    if (!session || !activeLocation) return;
-    // Only regenerate if location changed
-    if (planLocationRef.current === activeLocation.id && planItems.length > 0) return;
-    planLocationRef.current = activeLocation.id;
-    setCheckedItems({});
-    void loadPlan(activeLocation);
+    const id = activeLocation?.id;
+    if (!session || !id) return;
+    const generation = ++loadGeneration.current;
+    setPlanItems([]);
+    setPlanLoading(true);
+    setPlanError(null);
+    void (async () => {
+      try {
+        let saved = await fetchHouseholdState(id);
+        if (!saved.initialized) saved = await initializeHouseholdPlan(id);
+        if (generation === loadGeneration.current) acceptHouseholdState(saved);
+      } catch (error) {
+        if (generation === loadGeneration.current) setPlanError(error instanceof Error ? error.message : "Could not load your plan.");
+      } finally {
+        if (generation === loadGeneration.current) setPlanLoading(false);
+      }
+    })();
+    return () => { ++loadGeneration.current; };
+    // Changes to saved devices must not regenerate and overwrite an edited checklist.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeLocation, session]);
+  }, [activeLocation?.id, session?.user.id]);
 
-  const checkedCount = Object.values(checkedItems).filter(Boolean).length;
+  async function toggleCompletion(id: string, completed: boolean) {
+    if (!activeLocation || completionSaving || chatSending) return;
+    setCompletionSaving(true);
+    setPlanError(null);
+    try {
+      acceptHouseholdState(await saveActionCompletion(activeLocation.id, id, completed, planRevision));
+    } catch (error) {
+      setPlanError(error instanceof Error ? error.message : "Could not save this step.");
+    } finally {
+      setCompletionSaving(false);
+    }
+  }
+
+  const checkedCount = planItems.filter((item) => item.completed).length;
   const totalCount = planItems.length;
 
   // ── Assistant FAB + drawer ─────────────────────────────────────────────────
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
-  const [chatSending, setChatSending] = useState(false);
   const chatFeedRef = useRef<HTMLDivElement>(null);
 
   // Initialize chat with greeting when drawer opens (or location changes)
   useEffect(() => {
     if (session && userProfile?.first_name) {
-      const greeting = `Hi ${userProfile.first_name}. Tell me about your household — I can help you update your device list and refine your outage plan.`;
+      const greeting = `Hi ${userProfile.first_name}. Tell me about your household — I can update your saved electronic devices and outage action items. What would you like to change or ask about?`;
       setChatMessages([{ role: "assistant", text: greeting }]);
     }
-  }, [session, userProfile?.first_name]);
+  }, [session?.user.id, activeLocation?.id]);
 
   // Scroll to bottom of chat feed
   useEffect(() => {
@@ -282,71 +257,33 @@ export default function AppPage() {
   }, [chatMessages, drawerOpen]);
 
   async function sendChatMessage(text: string) {
-    if (!text.trim() || chatSending) return;
-    const userMsg: ChatMessage = { role: "user", text: text.trim() };
+    if (!text.trim() || chatSending || completionSaving || planLoading) return;
+    if (!activeLocation) {
+      setChatMessages((prev) => [...prev, { role: "assistant", text: "Select a saved location so I can use the right devices and action items." }]);
+      return;
+    }
+    const locationId = activeLocation.id;
     const history = chatMessages.map((m) => ({ role: m.role, text: m.text }));
-    setChatMessages((prev) => [...prev, userMsg]);
+    setChatMessages((prev) => [...prev, { role: "user", text: text.trim() }]);
     setChatInput("");
     setChatSending(true);
-
     try {
-      const devices = activeLocation ? itemsToDevices(activeLocation.electronic_items ?? []) : [];
-      const hasEV = activeLocation ? itemsHasEV(activeLocation.electronic_items ?? []) : false;
-      const payload: PlanRequestPayload = {
-        message: text.trim(),
-        history,
-        resident: {
-          name: userProfile?.first_name ?? "Resident",
-          devices,
-          hasEV,
-          livesAlone: false,
-          language: "en",
-        },
-        forecast: {
-          probability: activeForecastRef.current?.probability ?? 0.5,
-          primaryCause: activeForecastRef.current?.primaryCause ?? "wind",
-        },
-      };
-      const resp = await fetchPlan(payload);
-      const assistantMsg: ChatMessage = { role: "assistant", text: resp.reply };
-      setChatMessages((prev) => [...prev, assistantMsg]);
-
-      // ── Assistant-driven device mutation detection ────────────────────────
-      if (activeLocation && resp.items && resp.items.length > 0) {
-        // If the assistant returned updated items, regenerate the plan
-        setPlanItems(resp.items);
-        setCheckedItems({});
-      }
-
-      // Keyword detection: "added" / "removed" in reply → try to mutate items
-      const replyLower = resp.reply.toLowerCase();
-      const deviceMutationWords = ["added", "removed", "deleted", "updated your device"];
-      const hasMutation = deviceMutationWords.some((w) => replyLower.includes(w));
-      if (hasMutation && activeLocation) {
-        // Best-effort: refetch to pick up any server-side changes
+      const response = await sendHouseholdChat(locationId, text.trim(), history);
+      if (activeLocationIdRef.current !== locationId) return;
+      acceptHouseholdState(response);
+      setChatMessages((prev) => [...prev, { role: "assistant", text: response.reply }]);
+      if (response.saved) {
+        setPlanError(null);
         await refetchLocations();
-        // Find the refreshed location
-        // (we can't easily re-read state here; a followup effect will catch it)
       }
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : "Something went wrong.";
-      setChatMessages((prev) => [
-        ...prev,
-        { role: "assistant", text: `Sorry, I couldn't process that. ${errMsg}` },
-      ]);
+    } catch (error) {
+      if (activeLocationIdRef.current === locationId) {
+        setChatMessages((prev) => [...prev, { role: "assistant", text: error instanceof Error ? error.message : "I couldn't confirm a save. Please check your plan before trying again." }]);
+      }
     } finally {
       setChatSending(false);
     }
   }
-
-  // When refetch runs and locations update, sync activeLocation's electronic_items
-  useEffect(() => {
-    if (!activeLocation) return;
-    const refreshed = locations.find((l) => l.id === activeLocation.id);
-    if (refreshed && JSON.stringify(refreshed.electronic_items) !== JSON.stringify(activeLocation.electronic_items)) {
-      setActiveLocation(refreshed);
-    }
-  }, [locations, activeLocation]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -431,14 +368,18 @@ export default function AppPage() {
                 {/* No devices */}
                 {!planLoading && activeLocation && (!activeLocation.electronic_items?.length) && (
                   <p className="panel-description">
-                    No devices saved for <strong>{activeLocation.name}</strong>. Visit{" "}
-                    <Link to="/profile">your profile</Link> to add medical or power-dependent devices.
+                    No devices saved for <strong>{activeLocation.name}</strong>. Ask the assistant to add electronic devices, or edit them in{" "}
+                    <Link to="/profile">your profile</Link>.
                   </p>
                 )}
 
                 {/* Plan error */}
                 {planError && !planLoading && (
                   <p className="panel-description" style={{ color: "#da1e28" }}>{planError}</p>
+                )}
+
+                {!planLoading && !planError && activeLocation && planItems.length === 0 && (
+                  <p className="panel-description">Your action list is empty. Ask the assistant to create a plan or add a step.</p>
                 )}
 
                 {/* Plan items checklist */}
@@ -458,8 +399,8 @@ export default function AppPage() {
 
                     <div className="plan-items">
                       {planItems.map((item, idx) => {
-                        const key = `${item.when}-${idx}`;
-                        const checked = checkedItems[key] ?? false;
+                        const key = item.id;
+                        const checked = item.completed;
                         return (
                           <div key={key} className={`plan-item${checked ? " is-done" : ""}`}>
                             <Checkbox
@@ -477,8 +418,9 @@ export default function AppPage() {
                                 </span>
                               }
                               checked={checked}
+                              disabled={completionSaving || chatSending}
                               onChange={(_: unknown, { checked: c }: { checked: boolean }) => {
-                                setCheckedItems((prev) => ({ ...prev, [key]: c }));
+                                void toggleCompletion(item.id, c);
                               }}
                             />
                           </div>
@@ -573,14 +515,14 @@ export default function AppPage() {
                 placeholder="Ask about your plan…"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                disabled={chatSending}
+                disabled={chatSending || completionSaving || planLoading}
                 aria-label="Message to assistant"
               />
               <Button
                 type="submit"
                 kind="primary"
                 size="sm"
-                disabled={chatSending || !chatInput.trim()}
+                disabled={chatSending || completionSaving || planLoading || !chatInput.trim()}
               >
                 Send
               </Button>
