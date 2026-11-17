@@ -44,6 +44,15 @@ def test_partial_overlapping_duplicate_routes_not_double_counted():
     np.testing.assert_allclose(one,overlaps,rtol=1e-5)
 
 
+def test_static_release_roundtrip_and_grid_rejection(tmp_path):
+    from raster_pipeline.storage import LocalStore
+    from raster_pipeline.run import fixture_static
+    g=GridSpec(grid_id='tiny',west=-120,south=34,east=-118,north=35,resolution=1)
+    store=LocalStore(tmp_path)
+    manifest=fixture_static(g,store)
+    s=load_static(manifest,g,store)
+    assert s.canopy.shape==(1,2) and np.all(s.coverage[1]==1)
+    with pytest.raises(ValueError,match='grid'):load_static(manifest,GridSpec(),store)
 
 
 def test_geographic_canopy_uses_area_instead_of_pixel_count(tmp_path):
