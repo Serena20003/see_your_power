@@ -1,0 +1,17 @@
+Geometry ready {'key': 'outage/experimental-random-points/v1/geometry/6123a4066b127b77004104ef36a862ec22f10522d2be22ecf62932ced3334109.geojson', 'sha256': '6123a4066b127b77004104ef36a862ec22f10522d2be22ecf62932ced3334109', 'bytes': 1656674}
+history stream verified 8,388,608/999,210,542 bytes
+history stream verified 75,497,472/999,210,542 bytes
+history stream verified 142,606,336/999,210,542 bytes
+history stream verified 209,715,200/999,210,542 bytes
+history stream verified 276,824,064/999,210,542 bytes
+history stream verified 343,932,928/999,210,542 bytes
+history stream verified 411,041,792/999,210,542 bytes
+history stream verified 478,150,656/999,210,542 bytes
+history stream verified 545,259,520/999,210,542 bytes
+history stream verified 612,368,384/999,210,542 bytes
+history stream verified 679,477,248/999,210,542 bytes
+history stream verified 746,586,112/999,210,542 bytes
+history stream verified 813,694,976/999,210,542 bytes
+history stream verified 880,803,840/999,210,542 bytes
+history stream verified 947,912,704/999,210,542 bytes
+History ready {'key': 'outage/experimental-random-points/v1/history/fc6bfc56f30ae6432adf555a0089c3acbf3d60e04c5fb4580a461d493347aded.json', 'sha256': 'fc6bfc56f30ae6432adf555a0089c3acbf3d60e04c5fb4580a461d493347aded', 'bytes': 2689}

@@ -267,4 +267,36 @@ Start with `python -m outage_model.cli --store output readiness`. See
 input contracts, 5 GB preferred / 10 GB maximum local storage behavior and
 remote archival strategy; [data sources](outage_model/docs/DATA_SOURCES.md) for
 verified access and outstanding audits; and [model readiness](validation/MODEL_STATUS.md)
-for what has actually run. Generated data is confined to tests.
+for what has actually run. In this strict observed-incident workflow, generated
+data is confined to tests. The separate experimental workflow below intentionally
+trains on simulated locations derived from real county observations.
+
+
+## Experimental county-derived random-point baseline
+
+The user-authorized `outage_model.experimental` workflow is implemented and has
+been fitted on real EAGLE-I 2018 county observations with reproducible simulated
+within-county locations. It is an experimental **conditional allocated-impact
+regression**. Its split dataset has 180,000 real parent groups and 1,440,000
+weighted proxy rows across 2,758 represented CONUS counties; the actual fit uses
+121,940 training parents / 975,520 point rows from 2,474 counties. Missing county observations are not filled
+as zero, and customer counts are not treated as independent incidents.
+
+The trained predictors are geography/calendar variables; **no weather or canopy
+relationship was trained**. Output is median-like allocated customer impact, not
+physical-outage probability. Later-time county MAE was 222.72 versus 227.21 for the
+seasonal/county baseline, with substantial underprediction of severe totals.
+The source history, simulated allocation, fixed UTC-day windows, missingness,
+retrospective boundary vintage and evaluation limitations are documented in
+[experimental assumptions](outage_model/docs/EXPERIMENTAL_RANDOM_POINTS.md).
+
+Use `requirements-model.lock` plus `requirements-experimental.txt` and run:
+
+```sh
+.venv312/bin/python -m outage_model.experimental.cli validate --model-ref validation/experimental-model-ref.json
+.venv312/bin/python -m outage_model.experimental.cli predict --model-ref validation/experimental-model-ref.json --date 2026-11-17 --counties all
+```
+
+See [the actual run and portable handoff](validation/experimental-point-status.md).
+Experimental artifacts never advance the strict observed-incident probability
+pointer. No frontend or deployment was changed.

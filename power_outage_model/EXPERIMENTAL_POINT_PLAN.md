@@ -50,35 +50,58 @@
 
 ## Task 1 — Real source feasibility and experimental contracts
 
-- [ ] Inspect current disk, downloaded history, county/land geometry, installed environment, and this plan. Record a compact progress ledger in `validation/experimental-point-progress.md`.
-- [ ] Check official EAGLE-I archive metadata/download routes and any legitimate public mirror needed for anonymous access. Record source URL, size/format, coverage, source hash strategy and usable sample schema. Cap exploratory responses and avoid large downloads before space checks.
-- [ ] Write failing tests for semantics, missing-vs-zero preservation and streaming budget/access errors; implement contracts and ingest adapter.
-- [ ] Acceptance: ingest a real sample if accessible; test-only data cannot satisfy the real-data readiness flag.
+- [x] Inspect current disk, downloaded history, county/land geometry, installed environment, and this plan. Record a compact progress ledger in `validation/experimental-point-progress.md`.
+- [x] Check official EAGLE-I archive metadata/download routes and any legitimate public mirror needed for anonymous access. Record source URL, size/format, coverage, source hash strategy and usable sample schema. Cap exploratory responses and avoid large downloads before space checks.
+- [x] Write failing tests for semantics, missing-vs-zero preservation and streaming budget/access errors; implement contracts and ingest adapter.
+- [x] Acceptance: ingest a real sample if accessible; test-only data cannot satisfy the real-data readiness flag.
 
 ## Task 2 — Sampling, parent splits and features
 
-- [ ] Write failing tests for reproducible parent-derived seeds, exact county/land containment, maximum 32 proxies, weight mass conservation, and missing observations excluded.
-- [ ] Implement the explicitly versioned allocation policy; select suitable grid-cell/background or weighted impact labels consistently with the chosen model objective. Disclose every arbitrary allocation rule.
-- [ ] Write failing tests for parent/date disjointness, overlapping 72-hour windows and held-out counties; split parents before sampling. Keep correlated repetitions from inflating sample-size claims.
-- [ ] Build compact data from real historical records over a bounded initial period, preserving all available counties for that period if feasible. Report coverage instead of filling unavailable counties.
-- [ ] Include only verified available features. Persist exact order/recipes and geographic/time applicability.
+- [x] Write failing tests for reproducible parent-derived seeds, exact county/land containment, maximum 32 proxies, weight mass conservation, and missing observations excluded.
+- [x] Implement the explicitly versioned allocation policy; select suitable grid-cell/background or weighted impact labels consistently with the chosen model objective. Disclose every arbitrary allocation rule.
+- [x] Write failing tests for parent/date disjointness, overlapping 72-hour windows and held-out counties; split parents before sampling. Keep correlated repetitions from inflating sample-size claims.
+- [x] Build compact data from real historical records over a bounded initial period, preserving all available counties for that period if feasible. Report coverage instead of filling unavailable counties.
+- [x] Include only verified available features. Persist exact order/recipes and geographic/time applicability.
 
 ## Task 3 — Actual baseline fitting and held-out evaluation
 
-- [ ] Write failing tests for fixture/live provenance, native reload parity, feature order, simulated metadata, and parent-weight handling.
-- [ ] Implement a small natural-frequency/parent-weighted baseline and one shallow native tree challenger using chronological development selection only. Keep trial count/threads bounded for the deadline.
-- [ ] Fit on real county measurements with simulated spatial locations when available. Persist real model and source/sampling manifests; do not pass it to strict observed-incident release gates or publish it as a production probability.
-- [ ] Report parent counts, real positive/zero observations and missingness, held-out simulated-label metrics, real county aggregate checks where mathematically defined, and fixed-seed sensitivity. Compare a simple seasonal/county allocation baseline.
-- [ ] Acceptance: predictions are unchanged after reload; reports can be reproduced from pinned sources, split, seed and policy.
+- [x] Write failing tests for fixture/live provenance, native reload parity, feature order, simulated metadata, and parent-weight handling.
+- [x] Implement a small natural-frequency/parent-weighted baseline and one shallow native tree challenger using chronological development selection only. Keep trial count/threads bounded for the deadline.
+- [x] Fit on real county measurements with simulated spatial locations when available. Persist real model and source/sampling manifests; do not pass it to strict observed-incident release gates or publish it as a production probability.
+- [x] Report parent counts, real positive/zero observations and missingness, held-out simulated-label metrics, real county aggregate checks where mathematically defined, and fixed-seed sensitivity. Compare a simple seasonal/county allocation baseline.
+- [x] Acceptance: predictions are unchanged after reload; reports can be reproduced from pinned sources, split, seed and policy.
 
 ## Task 4 — Inference, assumptions and demo handoff
 
-- [ ] Write failing tests for explicit experimental metadata, missing model/feature/data errors and inference parity.
-- [ ] Finish CLI/inference with real artifacts and bounded representative predictions. Retain national coverage only for the source-supported scope, not a default nationwide-validation claim.
-- [ ] Document assumptions and limitations beside concrete commands, features and output interpretation. Explain whether weather was learned; distinguish county-grounded signal from invented within-county allocation.
-- [ ] Run new experimental suite and compatible existing model/raster regression checks; record exact results and any skips/environment limitations. Do not repeatedly rerun expensive raster fixtures without a new concern.
-- [ ] Produce final status, total related directory bytes, model artifact paths, data access gaps if any, and a concise demo-ready summary. Leave unrelated files and upstream publication untouched; no push/merge/deployment.
+- [x] Write failing tests for explicit experimental metadata, missing model/feature/data errors and inference parity.
+- [x] Finish CLI/inference with real artifacts and bounded representative predictions. Retain national coverage only for the source-supported scope, not a default nationwide-validation claim.
+- [x] Document assumptions and limitations beside concrete commands, features and output interpretation. Explain whether weather was learned; distinguish county-grounded signal from invented within-county allocation.
+- [x] Run new experimental suite and compatible existing model/raster regression checks; record exact results and any skips/environment limitations. Do not repeatedly rerun expensive raster fixtures without a new concern.
+- [x] Produce final status, total related directory bytes, model artifact paths, data access gaps if any, and a concise demo-ready summary. Leave unrelated files and upstream publication untouched; no push/merge/deployment.
 
 ## Completion evidence
 
 A successful run delivers a real fitted native baseline plus an explicitly simulated-location dataset lineage and honest evaluation report. If archive access prevents fitting, deliver the tested executable workflow and a precise data-access blocker rather than claiming that a trained model exists. The final report must distinguish these outcomes.
+
+## Completed execution — November 17, 2026
+
+Executed by the requested subagent and independently checked by the parent. The
+public EAGLE-I 2018 file was streamed and verified against its full published
+size/MD5. The dataset contains 180,000 real county/date parent records and 1.44M
+simulated weighted rows; the actual fit uses 121,940 parents/975,520 rows, with
+chronological and county holdouts retained. A small native regression model,
+full 2,758-county CONUS prediction export, and portable inference ZIP are saved.
+
+Source omissions prevent occurrence-probability labels; the implemented target is
+conditional allocated customer impact. Geography/calendar features were trained;
+weather and canopy were not. Later-time aggregate MAE 222.72 vs 227.21 seasonal
+baseline, with severe-total underprediction explicitly reported. No test-driven
+retuning was performed after inspecting that limitation.
+
+Final evidence: 26 focused producer checks; 12 experimental checks independently
+rerun by the parent; fresh portable-store parity, county polygon containment for
+all 66,192 exported points, mass-sum checks, source/fixture separation and native
+reload validation pass. Existing 59 observed-model tests passed before the first
+commit. Model directory approximately 8.30 GB, under 10 GB; no raw annual CSV retained.
+See `validation/experimental-point-status.md` and
+`validation/experimental-root-verification.json`.
