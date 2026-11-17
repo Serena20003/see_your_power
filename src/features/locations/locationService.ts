@@ -7,7 +7,7 @@ import type { Location } from '../../types/database';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyTable = any;
 
-export type LocationCreateData = Omit<Location, 'id' | 'created_at' | 'user_id'>;
+export type LocationCreateData = Omit<Location, 'id' | 'created_at' | 'user_id' | 'plan_items' | 'assistant_revision'>;
 export type LocationUpdateData = Partial<Omit<Location, 'id' | 'user_id' | 'created_at'>>;
 
 /**
