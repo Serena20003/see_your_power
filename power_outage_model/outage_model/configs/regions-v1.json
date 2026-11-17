@@ -1,0 +1,18 @@
+{
+  "schema_version": "outage-regions/v1",
+  "source": "https://www.ncei.noaa.gov/access/monitoring/reference-maps/us-climate-regions",
+  "semantics": "NOAA-style state membership; route cell centers through a separately pinned authoritative state geometry. Regions are calibration/evaluation metadata only.",
+  "regions": {
+    "Northeast": ["CT", "DE", "ME", "MD", "MA", "NH", "NJ", "NY", "PA", "RI", "VT"],
+    "East North Central": ["IA", "MI", "MN", "WI"],
+    "Central": ["IL", "IN", "KY", "MO", "OH", "TN", "WV"],
+    "Southeast": ["AL", "FL", "GA", "NC", "SC", "VA"],
+    "West North Central": ["MT", "NE", "ND", "SD", "WY"],
+    "South": ["AR", "KS", "LA", "MS", "OK", "TX"],
+    "Southwest": ["AZ", "CO", "NM", "UT"],
+    "Northwest": ["ID", "OR", "WA"],
+    "West": ["CA", "NV"]
+  },
+  "unknown": "global offset zero; no validation entitlement",
+  "boundaries": "Cell center point-in-state using pinned WGS84 polygons; record boundary-intersecting cells. No guessed rectangular region boundaries. DC is unsupported pending an explicit routing revision."
+}

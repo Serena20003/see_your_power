@@ -250,3 +250,21 @@ source-data spot checks and the complete live batch benchmark are still required
 * [MRLC NLCD canopy catalog](https://www.mrlc.gov/data/type/nlcd-tree-canopy-cover)
 * [CEC transmission inventory and attribute dictionary](https://data.ca.gov/@california-energy-commission/california-electric-transmission-lines)
 * [GDAL COG format](https://gdal.org/en/stable/drivers/raster/cog.html)
+
+## Supervised three-window training
+
+The separate `outage_model/` package implements downstream dataset assembly,
+purged chronological splits, seasonal/logistic baselines, three native CPU
+LightGBM classifiers, global/regularized regional calibration, support screening,
+complete additive explanations and independent `outage/v1/` publication. Its
+weather-score fallback is explicitly separate from probability. No production
+model or deployment is included; real aligned labels/history and untouched
+validation are required, with executable readiness failures when absent.
+
+Use `requirements-model.lock` and `Dockerfile.model` for the independent job.
+Start with `python -m outage_model.cli --store output readiness`. See
+[outage model operations](outage_model/docs/OPERATIONS.md) for complete commands,
+input contracts, 5 GB preferred / 10 GB maximum local storage behavior and
+remote archival strategy; [data sources](outage_model/docs/DATA_SOURCES.md) for
+verified access and outstanding audits; and [model readiness](validation/MODEL_STATUS.md)
+for what has actually run. Generated data is confined to tests.

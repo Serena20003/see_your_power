@@ -11,8 +11,12 @@ dynamic = ["dependencies"]
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
 
+[tool.setuptools.packages.find]
+include = ["raster_pipeline*", "outage_model*"]
+
 [tool.setuptools.package-data]
 raster_pipeline = ["configs/*.json"]
+outage_model = ["configs/*.json", "docs/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

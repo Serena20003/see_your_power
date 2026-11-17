@@ -1,0 +1,17 @@
+{
+  "schema_version": "outage-release-policy/v1",
+  "minimum_positive": 100,
+  "minimum_negative": 1000,
+  "minimum_blocks": 20,
+  "minimum_days": 90,
+  "reliability_bins": 10,
+  "minimum_bin_rows": 100,
+  "mean_absolute_calibration_gap": 0.05,
+  "maximum_calibration_gap": 0.10,
+  "bootstrap_replicates": 1000,
+  "bootstrap_seed": 42,
+  "thresholds": [0.01, 0.05, 0.1, 0.2, 0.5],
+  "stale_after_hours": 2,
+  "scopes": [],
+  "meaning": "Engineering screening gates; not a scientific guarantee. Empty scopes prohibit public probability release. Scope cells, seasons and horizons must be frozen before final test."
+}
