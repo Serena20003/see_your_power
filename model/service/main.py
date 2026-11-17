@@ -541,3 +541,7 @@ async def post_plan(req: PlanRequest) -> PlanResponse:
         reason = "invalid_response" if isinstance(exc, ValueError) else "watsonx_error"
 
     return _build_fallback(req, reason)
+
+
+from service.chat import router as chat_router
+app.include_router(chat_router)
