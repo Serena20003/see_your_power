@@ -123,7 +123,7 @@ class PlanResident(BaseModel):
     language: str = "en"
 
 class PlanForecast(BaseModel):
-    # probability is now Optional; None means no calibrated estimate available
+    # None means no calibrated estimate is available.
     probability: float | None = None
     windowStart: str = ""
     windowEnd: str = ""
@@ -153,7 +153,7 @@ class PlanResponse(BaseModel):
     reply: str
     items: list[PlanItem]
     source: Literal["llm", "fallback"] = "llm"
-    fallback_reason: Literal["missing_credentials", "project_unavailable", "runtime_unavailable", "model_unavailable", "access_denied", "watsonx_error"] | None = None
+    fallback_reason: Literal["missing_credentials", "project_unavailable", "runtime_unavailable", "model_unavailable", "access_denied", "watsonx_error", "invalid_response"] | None = None
 
 
 class WatsonxConfigurationError(ValueError):
@@ -167,7 +167,18 @@ class WatsonxConfigurationError(ValueError):
 _SYSTEM_PROMPT = """\
 You are a household power-outage planning assistant. Respond to the resident's latest message.
 Use the resident profile and forecast as background, but focus on what they just asked or told you.
-Do not repeat unrelated actions from the profile. Do not invent facts, prices, battery run times,
+For a request to create or regenerate a whole-household plan, cover every device in the
+resident inventory, grouping related devices into steps when helpful. Name the devices covered
+in your reply. If the inventory is empty or the user refers to other unlisted devices, ask for
+the missing names. For a focused follow-up,
+answer only that request. Do not repeat previous advice as your answer to a new request.
+The resident inventory and latest user statements are the source of truth; previous assistant
+messages are not evidence of equipment ownership or battery capacity. Never assume a backup
+battery exists unless the resident inventory or user explicitly says so. Phrase backup power
+options as things to check with the device supplier; do not promise compatibility or runtime.
+For a whole-household plan, the reply must summarize the actual steps for each listed device,
+not just announce that a plan exists. Group phone and laptop charging when helpful.
+Do not invent facts, prices, battery run times,
 nearby facilities, or outage predictions. Do not give medical treatment advice, dosing or diagnosis;
 for device or medicine storage specifics, direct the resident to their supplier or pharmacist.
 For an insulin fridge, suggest reviewing the medicine's storage instructions and asking a pharmacist
@@ -183,7 +194,7 @@ language code, and provide English copies of item titles and reasons.
 When the language code is "en", every string in the response must be in English.
 Make every plan item title an action the resident can take, starting with a verb. Do not put a
 number, duration, price, or place anywhere in the response unless it was given in the latest message
-or forecast. Do not compare outage length with battery runtime unless both values are provided.
+or resident inventory or forecast. Do not compare outage length with battery runtime unless both values are provided.
 Do not claim you scheduled, contacted, booked, ordered, or charged anything; you can only suggest
 steps and add them to the plan.
 Only say you added a step to the plan if the "items" array contains that step.
@@ -204,11 +215,46 @@ Schema:
 """
 
 
+def _requests_household_plan(req: PlanRequest) -> bool:
+    return bool(re.search(r"\bplan\b", req.message, re.I) and re.search(
+        r"\b(?:generate|create|regenerate|build|all|whole)\b", req.message, re.I
+    ))
+
+
+def _inventory_checklist(req: PlanRequest, reason: str) -> PlanResponse:
+    """Provide grounded basic steps when a complete model plan is unavailable."""
+    items = []
+    for device in req.resident.devices:
+        name = re.sub(r"\s*\(quantity:.*\)$", "", device).replace("_", " ")
+        when = "night_before"
+        if re.search(r"cpap|bipap|oxygen|dialysis|wheelchair|insulin", name, re.I):
+            title = f"Confirm an outage backup plan for {name}"
+            detail = "Ask the device supplier or care team about approved backup options and what to do if power is unavailable."
+        elif re.search(r"phone|laptop|tablet", name, re.I):
+            title = f"Charge {name} before the outage"
+            detail = "Charge the built-in battery and conserve it for essential use during the outage."
+        elif re.search(r"fridge|refrigerator|freezer", name, re.I):
+            when = "during_outage"
+            title = f"Keep {name} closed during the outage"
+            detail = "Limit door openings and review food storage guidance before deciding what to keep."
+        else:
+            title = f"Review outage instructions for {name}"
+            detail = "Check the manufacturer's shutdown and restart instructions and decide whether this device needs an approved backup supply."
+        items.append(PlanItem(title=title, title_en=title, when=when, reason=detail, reason_en=detail))
+    return PlanResponse(
+        reply="Watsonx could not provide a complete household plan. Here is a basic checklist for your saved devices: "
+              + " ".join(f"{item.title}. {item.reason}" for item in items),
+        items=items, source="fallback", fallback_reason=reason,
+    )
+
+
 def _build_fallback(
     req: PlanRequest,
-    reason: Literal["missing_credentials", "project_unavailable", "runtime_unavailable", "model_unavailable", "access_denied", "watsonx_error"],
+    reason: Literal["missing_credentials", "project_unavailable", "runtime_unavailable", "model_unavailable", "access_denied", "watsonx_error", "invalid_response"],
 ) -> PlanResponse:
     """Offer only templates relevant to the latest message when the LLM is unavailable."""
+    if _requests_household_plan(req) and req.resident.devices and req.resident.language == "en":
+        return _inventory_checklist(req, reason)
     templates: dict = json.loads((FIXTURES_DIR / "plan_templates.json").read_text())
     items: list[PlanItem] = []
     message = req.message.lower()
@@ -249,7 +295,7 @@ def _build_fallback(
 
 def _filter_generated_items(req: PlanRequest, items: list[PlanItem]) -> list[PlanItem]:
     """Discard plan claims with unsupported quantities or unsafe insulin destinations."""
-    allowed_numbers = set(re.findall(r"\d+(?:\.\d+)?", req.message))
+    allowed_numbers = set(re.findall(r"\d+(?:\.\d+)?", " ".join([req.message, *req.resident.devices])))
     for value in (
         req.forecast.durationLowHours,
         req.forecast.durationHighHours,
@@ -275,7 +321,7 @@ def _filter_generated_items(req: PlanRequest, items: list[PlanItem]) -> list[Pla
 
 def _filter_generated_reply(req: PlanRequest, reply: str) -> str:
     """Remove sentences with unsupported quantities or outage/runtime comparisons."""
-    allowed_numbers = set(re.findall(r"\d+(?:\.\d+)?", req.message))
+    allowed_numbers = set(re.findall(r"\d+(?:\.\d+)?", " ".join([req.message, *req.resident.devices])))
     for value in (req.forecast.durationLowHours, req.forecast.durationHighHours, req.runwayHoursAtFullCharge):
         if value is not None:
             allowed_numbers.add(str(value).removesuffix(".0"))
@@ -311,8 +357,8 @@ def _align_reply_with_items(reply: str, items: list[PlanItem]) -> str:
     return reply
 
 
-async def _call_watsonx(req: PlanRequest) -> PlanResponse:
-    """Call watsonx.ai chat completions and parse the JSON response."""
+async def _watsonx_json(messages: list[dict[str, str]]) -> dict:
+    """Shared authenticated JSON chat completion transport."""
     api_key = os.getenv("WATSONX_API_KEY", "")
     project_id = os.getenv("WATSONX_PROJECT_ID", "")
     region = os.getenv("WATSONX_REGION", "us-south")
@@ -332,15 +378,6 @@ async def _call_watsonx(req: PlanRequest) -> PlanResponse:
         token_resp.raise_for_status()
         iam_token = token_resp.json()["access_token"]
 
-        user_message = json.dumps({
-            "latest_message": req.message,
-            "recent_conversation": req.history[-6:],
-            "resident": req.resident.model_dump(),
-            "forecast": req.forecast.model_dump(),
-            "runwayHoursAtFullCharge": req.runwayHoursAtFullCharge,
-            "nearestCoolPlace": req.nearestCoolPlace,
-        }, indent=2)
-
         wx_url = (
             f"https://{region}.ml.cloud.ibm.com/ml/v1/text/chat"
             "?version=2024-05-01"
@@ -348,11 +385,9 @@ async def _call_watsonx(req: PlanRequest) -> PlanResponse:
         payload = {
             "model_id": model_id,
             "project_id": project_id,
-            "messages": [
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": user_message},
-            ],
-            "parameters": {"max_new_tokens": 1024, "temperature": 0},
+            "messages": messages,
+            "max_tokens": 2048,
+            "temperature": 0,
         }
         wx_resp = await client.post(
             wx_url,
@@ -370,10 +405,36 @@ async def _call_watsonx(req: PlanRequest) -> PlanResponse:
         if raw_text.startswith("json"):
             raw_text = raw_text[4:]
 
-    parsed = json.loads(raw_text)
+    return json.loads(raw_text)
+
+
+async def _call_watsonx(req: PlanRequest) -> PlanResponse:
+    household_context = json.dumps({
+        "resident": req.resident.model_dump(),
+        "forecast": req.forecast.model_dump(),
+        "runwayHoursAtFullCharge": req.runwayHoursAtFullCharge,
+        "nearestCoolPlace": req.nearestCoolPlace,
+    })
+    messages = [
+        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "user", "content": household_context},
+        *[{"role": turn["role"], "content": turn["text"]} for turn in req.history[-6:]
+          if turn.get("role") in ("user", "assistant") and turn.get("text", "").strip()],
+        {"role": "user", "content": req.message},
+    ]
+    parsed = await _watsonx_json(messages)
     response = PlanResponse(**parsed, source="llm")
     response.items = _filter_generated_items(req, response.items)
     response.reply = _align_reply_with_items(_filter_generated_reply(req, response.reply), response.items)
+    if _requests_household_plan(req) and req.resident.devices:
+        plan_text = " ".join([response.reply, *(f"{item.title} {item.reason}" for item in response.items)]).lower()
+        for device in req.resident.devices:
+            name = re.sub(r"\s*\(quantity:.*\)$", "", device).replace("_", " ")
+            words = [word for word in re.findall(r"[a-z]+", name.lower()) if word not in {"machine", "electric", "power", "home"}]
+            if not words or not any(re.search(rf"\b{re.escape(word)}\b", plan_text) for word in words):
+                raise ValueError("incomplete_household_plan")
+        if re.search(r"(?:refrigerator|fridge) battery", plan_text):
+            raise ValueError("unsupported_appliance_battery")
     return response
 
 
@@ -1072,6 +1133,10 @@ async def post_plan(req: PlanRequest) -> PlanResponse:
             reason = "watsonx_error"
     except (httpx.HTTPError, ValueError, KeyError, ValidationError) as exc:
         logger.warning("watsonx call failed (%s); using fallback templates", exc)
-        reason = "watsonx_error"
+        reason = "invalid_response" if isinstance(exc, ValueError) else "watsonx_error"
 
     return _build_fallback(req, reason)
+
+
+from service.chat import router as chat_router
+app.include_router(chat_router)

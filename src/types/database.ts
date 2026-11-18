@@ -13,6 +13,17 @@ export interface ElectronicItem {
   number_owned: number;
 }
 
+/** Persisted checklist step for a saved location. */
+export interface HouseholdAction {
+  id: string;
+  title: string;
+  title_en: string;
+  when: 'two_days_before' | 'night_before' | 'one_hour_before' | 'during_outage';
+  reason: string;
+  reason_en: string;
+  completed: boolean;
+}
+
 /** Mirrors the public.users row (email lives in auth.users, not here). */
 export interface UserProfile {
   id: string;
@@ -34,6 +45,8 @@ export interface Location {
   /** Loosely coupled county FIPS code — may be null; no business logic hard-depends on it. */
   fips_code: string | null;
   electronic_items: ElectronicItem[];
+  plan_items?: HouseholdAction[] | null;
+  assistant_revision?: number;
   additional_notes: string | null;
   created_at: string;
 }
