@@ -26,6 +26,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: power_outage_model/requirements-model.lock
 
       - name: Install model dependencies
         run: pip install --no-cache-dir -r power_outage_model/requirements-model.lock
