@@ -365,6 +365,42 @@ button { cursor: pointer; }
 .risk-map-key-notice code { background: #ffefc4; padding: 1px 4px; font-size: 11px; }
 .risk-map-key-notice a { color: #0f62fe; }
 
+/* Layer toggle panel — floats top-right inside the map canvas */
+.map-layer-panel {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  background: #f4f4f4;
+  border: 1px solid #e0e0e0;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: #161616;
+  min-width: 190px;
+  max-width: 260px;
+}
+.layer-panel-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  color: #161616;
+}
+.layer-panel-row input[type="checkbox"] {
+  flex: none;
+  cursor: pointer;
+}
+.layer-panel-disclaimer {
+  margin: 0;
+  color: #8d8d8d;
+  font-size: 10px;
+  font-style: italic;
+  line-height: 1.4;
+}
+
 .risk-map-legend {
   display: flex;
   align-items: center;

@@ -11,7 +11,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
-import type { FeatureCollection, Point } from "geojson";
+import type { FeatureCollection, Feature, Geometry, GeoJsonProperties, Point } from "geojson";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { CountyForecast } from "./types";
 import { buildDemoForecast, fetchForecast } from "./api";
@@ -106,6 +106,7 @@ export default function CountyRiskMap({
   const [forecasts, setForecasts] = useState<Record<string, CountyForecast>>(
     () => Object.fromEntries(FIPS_LIST.map((fips) => [fips, buildDemoForecast(fips)]))
   );
+  const [showEagleiLayer, setShowEagleiLayer] = useState(false);
   const accessToken   = (import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined) ?? "";
   latest.current      = { activeFips, activeWindow, onSelectFips, forecasts };
 
@@ -148,6 +149,43 @@ export default function CountyRiskMap({
     map.once("load", () => {
       const cur = latest.current;
       const pts = pointsGeoJSON(cur.forecasts, cur.activeFips, cur.activeWindow);
+
+      // ── County boundaries source (shared by EAGLE-I and future layers) ────
+      Promise.all([
+        fetch("/data/county-boundaries.geojson").then((r) => r.json()),
+        fetch("/data/eaglei_impact.json").then((r) => r.json()),
+      ]).then(([geojson, eagleiData]: [FeatureCollection<Geometry, Record<string, unknown>>, { counties: Record<string, number> }]) => {
+        const impactMap = eagleiData.counties;
+        // Join impact values into the GeoJSON features as an `impact` property.
+        for (const feature of geojson.features) {
+          const fips = feature.properties?.["GEOID"] as string;
+          if (feature.properties) feature.properties["impact"] = impactMap[fips] ?? 0;
+        }
+        map.addSource("county-boundaries", { type: "geojson", data: geojson });
+
+        // ── Layer: EAGLE-I impact choropleth (below heatmap) ────────────────
+        map.addLayer(
+          {
+            id:     "eaglei-impact-fill",
+            type:   "fill",
+            source: "county-boundaries",
+            layout: { visibility: "none" },
+            paint:  {
+              "fill-color": [
+                "interpolate", ["linear"], ["get", "impact"],
+                0,    "rgba(255,255,255,0)",
+                100,  "rgba(198,219,239,0.55)",
+                500,  "rgba(107,174,214,0.65)",
+                1500, "rgba(33,113,181,0.72)",
+                4000, "rgba(8,48,107,0.80)",
+              ],
+              "fill-opacity": 1,
+            },
+          },
+          // Insert below the heatmap so the choropleth sits under the glow.
+          "county-risk-heat",
+        );
+      }).catch((err) => console.warn("EAGLE-I layer init failed:", err));
 
       // ── Point source (heatmap + labels) ───────────────────────────────────
       map.addSource(SOURCE, { type: "geojson", data: pts });
@@ -236,7 +274,7 @@ export default function CountyRiskMap({
         },
       });
 
-      // ── Click handler ─────────────────────────────────────────────────────
+      // ── Click handler ────────────────────────────────────────────────────
       const CLICK_LAYERS = ["county-risk-dots", "county-risk-values", "county-risk-names"];
       map.on("click", (event) => {
         const hit  = map.queryRenderedFeatures(event.point, { layers: CLICK_LAYERS })[0];
@@ -297,6 +335,26 @@ export default function CountyRiskMap({
         {mapOverlay && (
           <div className="risk-map-overlay">{mapOverlay}</div>
         )}
+        <div className="map-layer-panel">
+          <span className="section-kicker">MAP LAYERS</span>
+          <label className="layer-panel-row">
+            <input
+              type="checkbox"
+              checked={showEagleiLayer}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setShowEagleiLayer(on);
+                mapRef.current?.setLayoutProperty(
+                  "eaglei-impact-fill", "visibility", on ? "visible" : "none",
+                );
+              }}
+            />
+            EAGLE-I 2018 impact
+          </label>
+          <p className="layer-panel-disclaimer">
+            These layers show contributing factors, not outage probabilities.
+          </p>
+        </div>
         <div className="risk-map-legend">
           <span className="section-kicker">RISK</span>
           {([
@@ -312,6 +370,25 @@ export default function CountyRiskMap({
           ))}
           <span className="risk-legend-note">Thermal heatmap · Click to select</span>
         </div>
+        {showEagleiLayer && (
+          <div className="risk-map-legend eaglei-legend">
+            <span className="section-kicker">EAGLE-I IMPACT</span>
+            {([
+              { label: "Low",    color: "rgba(198,219,239,0.55)" },
+              { label: "Med",    color: "rgba(107,174,214,0.65)" },
+              { label: "High",   color: "rgba(33,113,181,0.72)"  },
+              { label: "Severe", color: "rgba(8,48,107,0.80)"    },
+            ] as const).map(({ label, color }) => (
+              <span key={label} className="risk-legend-item">
+                <span className="risk-legend-swatch" style={{ background: color }} />
+                {label}
+              </span>
+            ))}
+            <span className="risk-legend-note">
+              2018 outage customer-impact (experimental allocation — not an outage probability)
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
