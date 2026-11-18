@@ -110,6 +110,12 @@ class LabelPolicy(Contract):
     accepted_geometry_meanings: tuple[str,...] = ('qualified_incident_marker',)
     source_priority: tuple[str,...] = ()
     duplicate_aliases: dict[str,str] = Field(default_factory=dict)
+    # Coordinate shifts below this threshold (metres, geodesic) are treated as
+    # location refinements and silently accepted; shifts at or above this value
+    # are quarantined as location_revision_requires_audit.  1000 m is well under
+    # one 0.125° grid cell (~14 km × 11 km at CA latitudes) but large enough to
+    # flag genuine county-level relocations.  Set to 0 to restore strict equality.
+    location_revision_tolerance_m: float = Field(default=1000.0, ge=0)
 
 
 class EventLedger(Contract):

@@ -80,6 +80,7 @@ Rules:
 5. Binary training rows require complete reporting for the **whole supported land portion of the cell and the entire window**, across relevant utilities. Partial utility footprints do not establish a whole-cell negative. Exclude both positive and negative rows from incomplete periods to avoid outcome-dependent sample selection; retain events separately for audit.
 6. Count new incidents, not the county layer's customers without power. An incident spanning several cells is not allocated to all cells without source-supported geometry semantics. Initial adapter accepts qualified incident markers; polygon-only sources need a separately reviewed label policy.
 7. Deterministically assign qualified points on interior grid edges to the eastern/southern cell; west/north outer edges are included and east/south outer edges excluded. Test orientation against the upstream north-up transform. Record location-uncertainty sensitivity near cell boundaries rather than inventing exact coordinates.
+7a. Early-incident coordinate refinements from live sources (e.g. Cal OES updating a marker by tens of metres in the first few polls) are sub-grid noise at 0.125° resolution (~14 km × 11 km cells) and do not require quarantine. `LabelPolicy` accepts an optional `location_revision_tolerance_m` field (default `1000`, matching the recommended Cal OES threshold; set to `0` to restore strict equality). When set above zero, `reconcile_events()` computes the geodesic shift; shifts strictly below the threshold update the stored location silently and always adopt the latest-seen coordinates; shifts at or above the threshold, or shifts where either coordinate is missing, still trigger `location_revision_requires_audit` quarantine. A threshold of 1000 m is recommended for Cal OES (well under one grid cell, but large enough to flag genuine county-level relocations). The raw per-poll coordinates are preserved in the immutable snapshot archive and are always recoverable for audit.
 8. No imputed negative labels, synthetic training history, outage-label spatial interpolation, or pseudo-labeling unobserved states.
 
 ### California first
@@ -326,16 +327,27 @@ Run commands below from `power_outage_model/` in the separately locked model env
 - [ ] Run `python -m pytest tests/outage -q`, then `python -m pytest tests/raster -q` in the compatible environment; document any environment-only native integration requirements. A fully offline end-to-end fixture must produce three windows, support reasons, inspectable trees, and reconstructible explanations.
 - [ ] Produce a final readiness report separating software checks, available real labels/history, operational forecast backtests, local validation, and national-transfer evidence. A working pipeline alone does not pass a probability-release gate.
 
-## 10. Readiness sequence and unresolved external facts
+## 10. Prospective collection operations
 
-1. **Now:** integrate with the completed DWD pipeline, pin a complete batch contract, and prioritize durable forecast archiving. Implement/test source adapters, labels, features, and model contracts using both explicit fixtures and verified upstream artifacts where available.
+The Cal OES adapter and `outage_model.cli collect` command are production-ready for continuous archiving. Raw snapshots (~100 KB each) and normalized event records are written to an immutable GCS bucket under `outage/v1/sources/california/`. Every snapshot is content-addressed; a repeated run with identical data is a no-op.
+
+**Recommended collection infrastructure** (no server to manage):
+- **Storage:** GCS bucket (e.g. `gs://see-your-power-outage`). Uniform bucket-level access; no object versioning. Apply a lifecycle rule deleting objects under `outage/v1/sources/california/raw/` after 90 days if cost is a concern; never apply lifecycle to `snapshots/` or `events/` — those are the durable label archive.
+- **Scheduler:** GitHub Actions cron workflow (`.github/workflows/collect-caloes.yml`) running `*/15 * * * *`. Requires a GCP service account key stored as a repository secret (`GCP_SA_KEY`) with `roles/storage.objectAdmin` on the bucket. Free tier supports ~48 minutes/day of runner time; a 15-minute collect run uses ~30 seconds.
+- **Source policy:** pass `--source-policy` only once per-utility type/onset/geometry audits are complete. Omitting it still archives the full raw snapshots and stores events with `outage_type='unknown'`; they will not qualify as training labels until the policy is set.
+
+See `.github/workflows/collect-caloes.yml` and `outage_model/docs/OPS.md` for setup instructions.
+
+## 11. Readiness sequence and unresolved external facts
+
+1. **Now:** integrate with the completed DWD pipeline, pin a complete batch contract, and prioritize durable forecast archiving. Implement/test source adapters, labels, features, and model contracts using both explicit fixtures and verified upstream artifacts where available. Start continuous Cal OES collection immediately.
 2. **As sources become usable:** collect prospective outage snapshots and weather archives; audit reporting domains, temporal gaps, onset/location semantics, and brief-outage detection. Investigate historical access independently.
 3. **When aligned history exists:** build the real dataset, compare baselines and trees, test calibration, and report geographic/storm transfer. A recent forecast archive cannot be replaced by reanalysis for operational validation. Reconstructed hindcasts need explicit availability assumptions and remain separate from strict operational backtests.
 4. **After untouched validation passes:** publish probabilities only in approved scopes; show the weather heuristic elsewhere. Expand scopes by new evidence, not by filling map gaps.
 
 External facts that remain to be established, with executable failure behavior already specified: actual historical access/retention; event ID and onset reliability; complete utility reporting footprints; whether interval snapshots capture brief incidents; available seasons/storms/states; historical forecast availability; historical canopy releases. These are data-readiness constraints, not reasons to fabricate labels or silently loosen gates.
 
-## 11. References
+## 12. References
 
 - [Existing hourly raster implementation plan](../docs/superpowers/plans/2026-11-16-hourly-weather-risk-rasters.md): upstream domain and score-only contract; its hourly supervised-target proposal is superseded **for this model** by the user's three 24-hour windows.
 - [California dataset documentation](https://data.ca.gov/@california-office-of-emergency-services/power-outage-incidents): recent utility-map incidents, approximate point locations, 15-minute refresh, no historical archive, and county customer totals.
@@ -344,7 +356,7 @@ External facts that remain to be established, with executable failure behavior a
 - [Watson et al., 2020](https://ietresearch.onlinelibrary.wiley.com/doi/10.1049/joe.2019.1274): multi-utility weather-outage modeling and environmental clustering; not proof of nationwide transfer.
 - [Essus et al., 2026, preprint](https://arxiv.org/abs/2608.24665): outage-model performance can degrade under spatial and event holdouts; motivates realistic validation rather than random pixel splits.
 
-## 12. Plan self-review
+## 13. Plan self-review
 
 - Every confirmed decision maps to a contract and implementation task; CONUS scope and source-defined location meaning are explicit.
 - Weather ingestion is a completed upstream producer with a checksum/schema adapter; model integration consumes its outputs without requiring changes to weather ingestion.
