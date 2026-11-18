@@ -332,7 +332,7 @@ Run commands below from `power_outage_model/` in the separately locked model env
 The Cal OES adapter and `outage_model.cli collect` command are production-ready for continuous archiving. Raw snapshots (~100 KB each) and normalized event records are written to an immutable GCS bucket under `outage/v1/sources/california/`. Every snapshot is content-addressed; a repeated run with identical data is a no-op.
 
 **Recommended collection infrastructure** (no server to manage):
-- **Storage:** GCS bucket (e.g. `gs://see-your-power-outage`). Uniform bucket-level access; no object versioning. Apply a lifecycle rule deleting objects under `outage/v1/sources/california/raw/` after 90 days if cost is a concern; never apply lifecycle to `snapshots/` or `events/` — those are the durable label archive.
+- **Storage:** GCS bucket (e.g. `gs://see-your-power-outage`). Uniform bucket-level access; no object versioning. Apply lifecycle rules deleting objects under `outage/v1/sources/california/raw/` and `outage/v1/sources/california/requests/` after 90 days to cap storage cost; never apply lifecycle to `snapshots/` or `events/` — those are the durable label archive.
 - **Scheduler:** GitHub Actions cron workflow (`.github/workflows/collect-caloes.yml`) running `*/15 * * * *`. Requires a GCP service account key stored as a repository secret (`GCP_SA_KEY`) with `roles/storage.objectAdmin` on the bucket. Free tier supports ~48 minutes/day of runner time; a 15-minute collect run uses ~30 seconds.
 - **Source policy:** pass `--source-policy` only once per-utility type/onset/geometry audits are complete. Omitting it still archives the full raw snapshots and stores events with `outage_type='unknown'`; they will not qualify as training labels until the policy is set.
 

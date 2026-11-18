@@ -25,20 +25,31 @@ Apply a lifecycle rule to cap raw-request log storage (optional):
 ```bash
 cat > /tmp/lifecycle.json <<'EOF'
 {
-  "rule": [{
-    "action": {"type": "Delete"},
-    "condition": {
-      "matchesPrefix": ["outage/v1/sources/california/requests/"],
-      "age": 90
+  "rule": [
+    {
+      "action": {"type": "Delete"},
+      "condition": {
+        "matchesPrefix": ["outage/v1/sources/california/raw/"],
+        "age": 90
+      }
+    },
+    {
+      "action": {"type": "Delete"},
+      "condition": {
+        "matchesPrefix": ["outage/v1/sources/california/requests/"],
+        "age": 90
+      }
     }
-  }]
+  ]
 }
 EOF
 gcloud storage buckets update gs://$BUCKET --lifecycle-file=/tmp/lifecycle.json
 ```
 
-Never apply lifecycle rules to `outage/v1/sources/california/snapshots/` or
-`outage/v1/sources/california/events/` — those are the durable label archive.
+`raw/` holds the full ArcGIS response payloads (~150 KB each) and `requests/`
+holds per-API-call logs (~300 KB × 3 per snapshot) — these are the two large
+transient prefixes.  Never apply lifecycle rules to `snapshots/` or `events/`
+— those are the durable label archive.
 
 ---
 
@@ -110,8 +121,8 @@ gcloud storage cat gs://$BUCKET/outage/v1/sources/california/snapshots/<key>.jso
 
 | Path prefix | Contents | Retention |
 |---|---|---|
-| `outage/v1/sources/california/raw/` | Full ArcGIS API response payloads | 90 days (lifecycle) |
-| `outage/v1/sources/california/requests/` | Per-request logs | 90 days (lifecycle) |
+| `outage/v1/sources/california/raw/` | Full ArcGIS API response payloads (~150 KB each) | 90 days (lifecycle) |
+| `outage/v1/sources/california/requests/` | Per-API-call logs (~300 KB × 3 per snapshot) | 90 days (lifecycle) |
 | `outage/v1/sources/california/snapshots/` | `RawSnapshot` metadata records | **Permanent** |
 | `outage/v1/sources/california/events/` | Normalized `OutageEvent` lists | **Permanent** |
 
