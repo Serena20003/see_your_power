@@ -12,8 +12,20 @@ def assign_cell(grid,lon,lat):
     return math.floor((grid.north-lat)/grid.resolution),math.floor((lon-grid.west)/grid.resolution)
 
 
+def _location_shift_m(prior,event):
+    """Geodesic distance in metres between two events' coordinates, or None if either is missing."""
+    if prior.longitude is None or prior.latitude is None or event.longitude is None or event.latitude is None:
+        return None
+    if prior.longitude==event.longitude and prior.latitude==event.latitude:
+        return 0.0
+    from pyproj import Geod
+    _,_,dist=Geod(ellps='WGS84').inv(prior.longitude,prior.latitude,event.longitude,event.latitude)
+    return abs(dist)
+
+
 def reconcile_events(snapshots,policy):
     by_id={};bad=set();quarantine=[]
+    tol=policy.location_revision_tolerance_m
     def quarantine_events(eid,reason,events):
         bad.add(eid)
         quarantine.append({'id':eid,'reason':reason,'events':[e.model_dump(mode='json') for e in events]})
@@ -24,15 +36,25 @@ def reconcile_events(snapshots,policy):
             if not event.original_event_id:reason='missing_event_id'
             if prior:
                 if prior.utility_id!=event.utility_id or prior.onset!=event.onset:reason='ambiguous_id_reuse_or_onset_revision'
-                elif (prior.longitude,prior.latitude)!=(event.longitude,event.latitude):reason='location_revision_requires_audit'
+                elif (prior.longitude,prior.latitude)!=(event.longitude,event.latitude):
+                    shift=_location_shift_m(prior,event)
+                    # tol==0 means strict equality (original behaviour): any shift quarantines.
+                    # tol>0: only quarantine if shift is unknown (None) or meets/exceeds tolerance.
+                    if tol==0 or shift is None or shift>=tol:reason='location_revision_requires_audit'
                 elif prior.outage_type!=event.outage_type:reason='classification_revision_requires_audit'
             if reason:
                 quarantine_events(eid,reason,[prior,event] if prior else [event]);continue
             if prior:
                 priority={s:i for i,s in enumerate(policy.source_priority)}
                 chosen=min((prior,event),key=lambda e:priority.get(e.source,999))
+                # When coordinates shifted but stayed within tolerance, always
+                # adopt the latest-seen location (event > prior by definition
+                # since we iterate snapshots in order).
+                location_updated=(prior.longitude,prior.latitude)!=(event.longitude,event.latitude)
+                loc_override={'longitude':event.longitude,'latitude':event.latitude} if location_updated else {}
                 by_id[eid]=chosen.model_copy(update={'canonical_id':eid,'first_seen':min(prior.first_seen,event.first_seen),
-                    'last_seen':max(prior.last_seen,event.last_seen),'snapshot_ids':tuple(sorted(set(prior.snapshot_ids+event.snapshot_ids)))})
+                    'last_seen':max(prior.last_seen,event.last_seen),'snapshot_ids':tuple(sorted(set(prior.snapshot_ids+event.snapshot_ids))),
+                    **loc_override})
             else:by_id[eid]=event.model_copy(update={'canonical_id':eid})
     signatures=defaultdict(list)
     for eid,event in by_id.items():
