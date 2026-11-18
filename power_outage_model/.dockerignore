@@ -1,0 +1,8 @@
+.venv*
+.cache
+output
+__pycache__
+.pytest_cache
+fixtures/raster/live-*
+**/__pycache__
+**/*.pyc

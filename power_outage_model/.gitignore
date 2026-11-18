@@ -1,0 +1,13 @@
+.venv*/
+__pycache__/
+.pytest_cache/
+.cache/
+output/
+fixtures/raster/live-*
+*.egg-info/
+infra/.terraform/
+infra/*.tfstate*
+# Model cards and generated feature registry are reviewable source artifacts.
+!outage_model/docs/
+!outage_model/docs/**
+.outage-budget.lock

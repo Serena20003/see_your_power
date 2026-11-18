@@ -1,0 +1,58 @@
+name: Collect Cal OES outage snapshots
+
+on:
+  schedule:
+    # Every 15 minutes. GitHub Actions cron runs in UTC.
+    - cron: '*/15 * * * *'
+  # Allow a manual trigger from the Actions tab for testing.
+  workflow_dispatch:
+
+jobs:
+  collect:
+    name: Fetch and archive Cal OES snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      # GCS bucket root, e.g. gs://see-your-power-outage
+      # Set this in repo Settings → Secrets and variables → Actions → Variables.
+      GCS_BUCKET: ${{ vars.CALOES_GCS_BUCKET }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install model dependencies
+        run: pip install --no-cache-dir -r power_outage_model/requirements-model.lock
+        working-directory: .
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          # Store the full JSON key as a repository secret named GCP_SA_KEY.
+          # The service account needs roles/storage.objectAdmin on the bucket.
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Collect snapshot
+        # --source-policy is omitted intentionally: collection runs without an
+        # approved type/onset/geometry policy so that raw snapshots accumulate
+        # from day one.  Events are stored with outage_type='unknown' and will
+        # not qualify as training labels until a reviewed policy JSON is added
+        # and passed here.  See IMPLEMENTATION_PLAN.md §3 (California first).
+        run: |
+          python -m outage_model.cli \
+            --store "$GCS_BUCKET" \
+            collect
+        working-directory: power_outage_model
+
+      - name: Report on failure
+        if: failure()
+        run: |
+          echo "Cal OES collection failed. Check the step output above."
+          echo "Common causes: ArcGIS schema drift, source unavailable, GCS permission error."
+          echo "The previous snapshot in GCS is unaffected; collection resumes on the next run."

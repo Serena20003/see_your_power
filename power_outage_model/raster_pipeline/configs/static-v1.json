@@ -1,0 +1,50 @@
+{
+  "static_version": null,
+  "canopy_valid_range": [0, 100],
+  "canopy_special_codes": [255],
+  "sources": {
+    "canopy": {
+      "path": "REQUIRED-local-percent-canopy.tif",
+      "uri": "https://data.fs.usda.gov/geodata/rastergateway/treecanopycover/docs/v2025-6/nlcd_tcc_conus_2025_v2025-6_wgs84.zip",
+      "vintage": "NLCD TCC CONUS reference year 2025, edition v2025-6, released 2026",
+      "sha256": null,
+      "crs": "EPSG:4326",
+      "attribution": "USDA Forest Service / MRLC NLCD Tree Canopy Cover",
+      "license": "US Government public data; retain USDA metadata and disclaimer",
+      "metadata_uri": "https://data.fs.usda.gov/geodata/rastergateway/treecanopycover/docs/TCC_v2025-6_Methods.pdf",
+      "codebook_status": "Validate extracted product codebook before production build; only 0-100 accepted, all other values excluded."
+    },
+    "analysis_land": {
+      "path": "REQUIRED-CONUS-land-only.geojson",
+      "uri": "https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html",
+      "vintage": "REQUIRED exact boundary/land release; exclude AK, HI, territories and water",
+      "sha256": null,
+      "attribution": "US Census Bureau TIGER/Line; retain source land/water processing recipe",
+      "license": "US Government public data"
+    },
+    "california": {
+      "path": "REQUIRED-california.geojson",
+      "uri": "https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html",
+      "vintage": "REQUIRED exact California boundary release",
+      "sha256": null,
+      "attribution": "US Census Bureau",
+      "license": "US Government public data"
+    },
+    "assessed": {
+      "path": "REQUIRED-assessed-california-footprint.geojson",
+      "uri": "REQUIRED documented assessment footprint URI",
+      "vintage": "REQUIRED assessment date and recipe",
+      "sha256": null,
+      "attribution": "Assessment footprint identifies examined inventory extent, not inventory completeness",
+      "license": "REQUIRED"
+    },
+    "transmission": {
+      "path": "REQUIRED-cec-transmission.geojson",
+      "uri": "https://data.ca.gov/@california-energy-commission/california-electric-transmission-lines",
+      "vintage": "CEC inventory catalog last updated 2026-11-10; pin exact export before build",
+      "sha256": null,
+      "attribution": "California Energy Commission, California Electric Transmission Lines",
+      "license": "Creative Commons Attribution; no restrictions on public use per CEC catalog"
+    }
+  }
+}

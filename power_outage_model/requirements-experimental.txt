@@ -1,0 +1,2 @@
+# Install requirements-model.lock first. Only added dependency for Census shapefile reading:
+pyshp==2.3.1

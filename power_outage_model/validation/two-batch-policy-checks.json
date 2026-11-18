@@ -1,0 +1,21 @@
+{
+  "verified_at_utc": "2026-11-17T03:10:25.583587+00:00",
+  "policy": "latest_complete_plus_previous_complete",
+  "forecast_batch_retention_count": 2,
+  "raw_archive": "disabled",
+  "automatic_cleanup": "after publication; reference-locked",
+  "container_raster_tests": "68 passed, 2 warnings in 108.21s (0:01:48)",
+  "focused_retention_tests": "8 passed in 57.81s",
+  "docker_image": "sha256:f7d7c03d637af3b576b1f40def745194e9c936c8cc5b490faadc9b58dfcb5572",
+  "legacy_store_preview": {
+    "dry_run": true,
+    "eligible_objects": 309,
+    "eligible_raw_objects": 309
+  },
+  "existing_data_deleted": false,
+  "local_working_cache": "unchanged; manual cleanup",
+  "incomplete_staging_grace_days": 7,
+  "cloud_deployed": false,
+  "retention_changes_sha256": "f743909d5c2792dc0c784bf3b0bbcd4041871bc973bf3d5376f5a13168687f2c",
+  "package_tests": "80 passed, 1 skipped, 2 warnings in 153.91s (0:02:33)"
+}

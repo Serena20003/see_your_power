@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "see-your-power-raster-pipeline"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.setuptools.packages.find]
+include = ["raster_pipeline*", "outage_model*"]
+
+[tool.setuptools.package-data]
+raster_pipeline = ["configs/*.json"]
+outage_model = ["configs/*.json", "docs/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

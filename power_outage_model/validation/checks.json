@@ -1,0 +1,17 @@
+{
+  "verified_at_utc": "2026-11-17T02:14:07.816835+00:00",
+  "results": {
+    "container_build_and_tests": "59 passed, 2 warnings in 80.67s (0:01:20)",
+    "local_tests": "58 passed, 1 skipped, 2 warnings in 98.12s (0:01:38)",
+    "existing_tests": "57 passed, 1 warning in 3.88s",
+    "terraform_validate": "Success: configuration valid",
+    "strict_native_test": "1 passed in 2.40s"
+  },
+  "docker_image": "sha256:98e7e251f2d16b87bacbb38ffa0f859f57165fab783cbaf4cdee008da05bfcb1",
+  "implementation_and_tests_sha256": "4be6635079cf065b0c248f3282898d4ddb1abffa3e9949ac25593a01ccd3e401",
+  "limitations": [
+    "Real static source pins and spot checks are incomplete",
+    "Full72-hour live batch performance has not been measured",
+    "GCS IAM/scheduler/alerts have not been deployed or exercised"
+  ]
+}

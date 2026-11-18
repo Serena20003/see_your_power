@@ -1,0 +1,1 @@
+{"method":"environmental_heuristic_v2","wind":[10,25],"rain":[1,10],"heat":[30,45],"cold":[-15,0],"weights":[0.5,0.3,0.2],"canopy_weight":0.1}
