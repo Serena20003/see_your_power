@@ -28,6 +28,18 @@ class ForecastStatus(str, Enum):
     UNAVAILABLE = "unavailable"
 
 
+class DataMode(str, Enum):
+    """
+    Provenance of the returned data.  Independent of model eligibility status.
+    - sample:      data originates from a fixture or synthetic source
+    - live:        data was retrieved from a live provider (may still be stale)
+    - unavailable: no usable data could be returned
+    """
+    SAMPLE = "sample"
+    LIVE = "live"
+    UNAVAILABLE = "unavailable"
+
+
 class OutageType(str, Enum):
     UNPLANNED = "unplanned"
     PLANNED = "planned"
@@ -94,6 +106,14 @@ class CountyForecast(BaseModel):
 
     status: ForecastStatus
 
+    # Provenance: sample fixtures are always "sample"; live pipeline output is "live";
+    # unknown/unavailable counties are "unavailable".
+    # Old JSON without this field defaults conservatively to "unavailable".
+    data_mode: DataMode = Field(
+        default=DataMode.UNAVAILABLE,
+        description="Data provenance: sample | live | unavailable."
+    )
+
     # The three windows.  Always present; probability=None when status != local_validated/transfer.
     next_24h: ForecastWindow
     next_24_48h: ForecastWindow
@@ -147,3 +167,114 @@ class CountyCoverage(BaseModel):
     canopy_coverage: bool
     terrain_coverage: bool
     current_status: ForecastStatus
+
+
+# ---------------------------------------------------------------------------
+# Weather score — separate contract, never reuses CountyForecast fields
+# ---------------------------------------------------------------------------
+
+class WeatherScoreMethod(str, Enum):
+    V1 = "weather_score_v1"
+
+
+class AlertStatus(str, Enum):
+    AVAILABLE = "available"
+    STALE = "stale"
+    UNAVAILABLE = "unavailable"
+
+
+class RefreshState(str, Enum):
+    IDLE = "idle"
+    UPDATING = "updating"
+    RETRY_WAIT = "retry_wait"
+
+
+class NWSAlertItem(BaseModel):
+    """One active NWS alert near the queried point."""
+    id: str
+    event: str
+    effective: Optional[datetime] = None
+    onset: Optional[datetime] = None
+    expires: Optional[datetime] = None
+    url: Optional[str] = None
+
+
+class AlertsContext(BaseModel):
+    """
+    Top-level NWS alert context.  Failure/empty/stale are distinct states:
+    - available + items=[]: live response returned no active alerts
+    - stale:    cached response older than 5 minutes but under 15
+    - unavailable: no usable live data; never implies no active alerts exist
+    """
+    status: AlertStatus
+    retrieved_at: Optional[datetime] = None
+    items: list[NWSAlertItem] = Field(default_factory=list)
+
+
+class WeatherDriver(BaseModel):
+    """One numerical driver explanation for a window score."""
+    label: str
+    value: float
+    unit: str
+
+
+class WeatherWindow(BaseModel):
+    """
+    A single 24-hour weather forecast window (0–24h, 24–48h, 48–72h from retrieval anchor).
+    score is null when fewer than 24 complete hourly records are available.
+    """
+    window_start: datetime
+    window_end: datetime
+
+    # 0–100 weather stress score, null for incomplete windows
+    score: Optional[float] = Field(default=None, ge=0.0, le=100.0)
+
+    # Measurements — always in SI units as received from Open-Meteo
+    peak_wind_speed_ms: Optional[float] = None   # m/s, NOT wind gust
+    min_temp_c: Optional[float] = None
+    max_temp_c: Optional[float] = None
+    mean_precip_mm: Optional[float] = None
+
+    # Up to three numerical driver explanations
+    drivers: list[WeatherDriver] = Field(default_factory=list, max_length=3)
+
+
+class WeatherScoreResponse(BaseModel):
+    """
+    Response from GET /v1/weather-score?lat=…&lon=…
+
+    data_mode:
+      live      — verified live-source provenance (may still be stale)
+      unavailable — no usable live data remains
+
+    calibrated is always False; this is a heuristic weather indicator.
+    """
+    # Coordinates
+    requested_lat: float
+    requested_lon: float
+    queried_lat: float    # rounded to 3 decimal places
+    queried_lon: float
+    # Provider-returned grid coordinates and elevation (from Open-Meteo)
+    grid_lat: Optional[float] = None
+    grid_lon: Optional[float] = None
+    grid_elevation_m: Optional[float] = None
+
+    method: WeatherScoreMethod = WeatherScoreMethod.V1
+    data_mode: DataMode      # live | unavailable
+    calibrated: bool = False
+
+    # Timestamps
+    weather_retrieved_at: Optional[datetime] = None
+    provider_issue_time: Optional[datetime] = None   # always null; Open-Meteo has no issue time
+
+    # Availability/freshness flags
+    weather_available: bool = False
+    weather_stale: bool = False          # True when >60 min old but <6 h old
+    refresh_state: RefreshState = RefreshState.IDLE
+    next_refresh_at: datetime
+
+    # Three forecast windows (0–24, 24–48, 48–72 from retrieval anchor)
+    windows: list[WeatherWindow] = Field(default_factory=list)
+
+    # Alerts context — independent of score and windows
+    alerts: AlertsContext
