@@ -4,3 +4,6 @@ dist/
 *.tsbuildinfo
 */.venv/
 .env.local
+
+data/
+.bob/

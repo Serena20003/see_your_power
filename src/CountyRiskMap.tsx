@@ -87,12 +87,16 @@ interface Props {
   activeWindow:   WindowKey;
   onSelectFips:   (fips: string) => void;
   activeForecast: CountyForecast | null;
+  /** When set (and non-null), fly the map to these coordinates at zoom 11. */
+  flyToCoords?:   { lat: number; lon: number } | null;
+  /** Rendered as an absolutely-positioned overlay inside the map canvas (top-left). */
+  mapOverlay?:    React.ReactNode;
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
 
 export default function CountyRiskMap({
-  activeFips, activeWindow, onSelectFips, activeForecast,
+  activeFips, activeWindow, onSelectFips, activeForecast, flyToCoords, mapOverlay,
 }: Props) {
   const containerRef  = useRef<HTMLDivElement>(null);
   const mapRef        = useRef<mapboxgl.Map | null>(null);
@@ -265,6 +269,15 @@ export default function CountyRiskMap({
     }
   }, [activeFips]);
 
+  // ── Fly to address-search result ──────────────────────────────────────────
+  useEffect(() => {
+    if (!flyToCoords) return;
+    const map = mapRef.current;
+    if (map) {
+      map.flyTo({ center: [flyToCoords.lon, flyToCoords.lat], zoom: 11, duration: 700 });
+    }
+  }, [flyToCoords]);
+
   const windowLabel = activeWindow === "next_24h" ? "NEXT 24H"
                     : activeWindow === "next_24_48h" ? "24–48H" : "48–72H";
 
@@ -281,6 +294,9 @@ export default function CountyRiskMap({
           </div>
         )}
         <div ref={containerRef} style={{ height: "440px", width: "100%" }} />
+        {mapOverlay && (
+          <div className="risk-map-overlay">{mapOverlay}</div>
+        )}
         <div className="risk-map-legend">
           <span className="section-kicker">RISK</span>
           {([
