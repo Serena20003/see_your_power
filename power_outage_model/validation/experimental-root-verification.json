@@ -1,0 +1,16 @@
+{
+  "portable_isolated_store_parity": true,
+  "bundle_bytes": 879147,
+  "bundle_sha256": "a179ba28e681273333de4bc635357c9754c6c2d8199892cf32b4fe92293e6268",
+  "training_arrays_or_history_observations_in_bundle": false,
+  "assumptions_and_source_license_included": true,
+  "national_counties": 2758,
+  "national_county_windows": 8274,
+  "national_simulated_points": 66192,
+  "all_points_inside_county_polygons": true,
+  "point_mass_sums_to_prediction": true,
+  "calendar_extrapolation_explicit": true,
+  "experimental_tests_passed": 12,
+  "existing_model_tests_precommit_passed": 59,
+  "model_directory_bytes": 8302617158
+}

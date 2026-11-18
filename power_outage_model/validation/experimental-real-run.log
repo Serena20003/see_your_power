@@ -1,0 +1,14 @@
+Generating proxies from real county history
+sampling real parent 0/180,000
+sampling real parent 20,000/180,000
+sampling real parent 40,000/180,000
+sampling real parent 60,000/180,000
+sampling real parent 80,000/180,000
+sampling real parent 100,000/180,000
+sampling real parent 120,000/180,000
+sampling real parent 140,000/180,000
+sampling real parent 160,000/180,000
+Dataset ready {'key': 'outage/experimental-random-points/v1/datasets/85ae02e7aaf40dd4ff551f01fb8c1228d5b1cace74a27c6857595611a89ae676.json', 'sha256': '85ae02e7aaf40dd4ff551f01fb8c1228d5b1cace74a27c6857595611a89ae676', 'bytes': 25553}
+Trained real-history model {'model_ref': {'key': 'outage/experimental-random-points/v1/models/4e97b613a2ff4aebeb7d63d4140c397972c2c832983611ac099a7db2d0d0d572/d3c74c585f8aa7cb1f205097f5dcb0165279cb7991eee4696caa0bc4e0695b5b.json', 'sha256': 'd3c74c585f8aa7cb1f205097f5dcb0165279cb7991eee4696caa0bc4e0695b5b', 'bytes': 944213}, 'evaluation_ref': {'key': 'outage/experimental-random-points/v1/models/4e97b613a2ff4aebeb7d63d4140c397972c2c832983611ac099a7db2d0d0d572/83ea56627618616a22f0060338f18d543b733e9f9714a534c9bd63a02e13310d.json', 'sha256': '83ea56627618616a22f0060338f18d543b733e9f9714a534c9bd63a02e13310d', 'bytes': 6821}, 'model_id': '4e97b613a2ff4aebeb7d63d4140c397972c2c832983611ac099a7db2d0d0d572', 'training_seconds': 42.58460041694343}
+Representative predictions {'key': 'outage/experimental-random-points/v1/predictions/9610c59e839e172521bfc2bf68794e0d862ca6d965fae64f4cffb5249388750b.json', 'sha256': '9610c59e839e172521bfc2bf68794e0d862ca6d965fae64f4cffb5249388750b', 'bytes': 17737}
+Portable export {'bundle_ref': {'key': 'outage/experimental-random-points/v1/exports/6223e6ba1744270226621cc0123e980a1e6dfee524d849a097a1f555a2ad512a.zip', 'sha256': '6223e6ba1744270226621cc0123e980a1e6dfee524d849a097a1f555a2ad512a', 'bytes': 864120}, 'model_id': '4e97b613a2ff4aebeb7d63d4140c397972c2c832983611ac099a7db2d0d0d572', 'inference_only': True, 'experimental': True, 'locations_simulated': True}

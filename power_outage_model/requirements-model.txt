@@ -1,0 +1,13 @@
+# Downstream CPU-only model job; independent of the raster normalization tools.
+numpy==2.1.3
+scipy==1.14.1
+pydantic==2.10.3
+httpx==0.27.2
+rasterio==1.4.3
+shapely==2.1.2
+pyproj==3.7.2
+rio-cogeo==5.4.1
+google-cloud-storage==2.19.0
+lightgbm==4.6.0
+scikit-learn==1.6.1
+pyarrow==19.0.1

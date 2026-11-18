@@ -1,0 +1,40 @@
+{
+  "software_checks": [
+    {
+      "command": "python -m pytest tests/outage tests/raster -q",
+      "passed": 124,
+      "skipped": 1,
+      "warnings": 2,
+      "seconds": 234.51
+    },
+    {
+      "command": "python -m pytest tests/outage/test_labels.py tests/outage/test_cli.py -q",
+      "passed": 13,
+      "scope": "boundary-sensitivity and CLI delta after combined collection"
+    },
+    {
+      "command": "python -m pytest tests/outage/test_cli.py -q",
+      "passed": 4,
+      "scope": "includes final real-format build-dataset command integration test"
+    },
+    {
+      "command": "python -m pip check",
+      "result": "No broken requirements found."
+    },
+    {
+      "command": "python -m compileall -q outage_model",
+      "result": "passed"
+    }
+  ],
+  "unique_current_checks": {
+    "model_passed": 59,
+    "raster_passed": 67,
+    "raster_skipped": 1
+  },
+  "new_tests_after_combined_collection": 2,
+  "fixture_accuracy_claims": false,
+  "real_production_training_performed": false,
+  "deployment_performed": false,
+  "skip_reason": "Native CDO integration requires the raster native-tool environment; downstream model image is separate.",
+  "warning_note": "Two existing Rasterio/Affine pending-deprecation warnings."
+}

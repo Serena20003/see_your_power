@@ -1,0 +1,14 @@
+FROM python:3.12.8-slim-bookworm@sha256:2199a62885a12290dc9c5be3ca0681d367576ab7bf037da120e564723292a2f0
+# Native CPU inference only. No CDO, GRIB archive or GPU runtime in this job.
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /pipeline
+COPY requirements-model.lock ./
+RUN pip install --no-cache-dir -r requirements-model.lock
+COPY raster_pipeline ./raster_pipeline
+COPY outage_model ./outage_model
+RUN useradd --uid 10001 --create-home model && mkdir -p /data && chown model:model /data
+USER model
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 OMP_NUM_THREADS=4
+ENTRYPOINT ["python", "-m", "outage_model.cli"]
+CMD ["--help"]

@@ -1,0 +1,525 @@
+{
+  "currentVersion" : 12, 
+  "id" : 0, 
+  "name" : "Power Outage Incidents", 
+  "type" : "Feature Layer", 
+  "serviceItemId" : "439afad071eb4754903906aff1946719", 
+  "cacheMaxAge" : 300, 
+  "isView" : true, 
+  "isUpdatableView" : true, 
+  "sourceSchemaChangesAllowed" : true, 
+  "displayField" : "OBJECTID", 
+  "description" : "Power Outage Incidents", 
+  "copyrightText" : "", 
+  "defaultVisibility" : true, 
+  "editFieldsInfo" : {
+    "creationDateField" : "CreationDate", 
+    "creatorField" : "Creator", 
+    "editDateField" : "EditDate", 
+    "editorField" : "Editor"
+  }, 
+  "editingInfo" : {
+    "lastEditDate" : 1794882539061, 
+    "schemaLastEditDate" : 1792120184686, 
+    "dataLastEditDate" : 1794882539061
+  }, 
+  "relationships" : [], 
+  "isDataVersioned" : false, 
+  "hasContingentValuesDefinition" : false, 
+  "supportsAppend" : true, 
+  "supportsCalculate" : true, 
+  "supportsASyncCalculate" : true, 
+  "supportsTruncate" : false, 
+  "supportsAttachmentsByUploadId" : true, 
+  "supportsAttachmentsResizing" : true, 
+  "supportsRollbackOnFailureParameter" : true, 
+  "supportsStatistics" : true, 
+  "supportsExceedsLimitStatistics" : true, 
+  "supportsAdvancedQueries" : true, 
+  "supportsValidateSql" : true, 
+  "supportsCoordinatesQuantization" : true, 
+  "supportsLayerOverrides" : true, 
+  "supportsTilesAndBasicQueriesMode" : true, 
+  "supportsFieldDescriptionProperty" : true, 
+  "supportsQuantizationEditMode" : true, 
+  "supportsColumnStoreIndex" : true, 
+  "supportsApplyEditsWithGlobalIds" : true, 
+  "supportsReturningQueryGeometry" : true, 
+  "enableNullGeometry" : false, 
+  "advancedQueryCapabilities" : {
+    "supportsPagination" : true, 
+    "supportsPaginationOnAggregatedQueries" : true, 
+    "supportsQueryRelatedPagination" : true, 
+    "supportsQueryWithDistance" : true, 
+    "supportsOutDistance" : true, 
+    "supportsReturningQueryExtent" : true, 
+    "supportsStatistics" : true, 
+    "supportsOrderBy" : true, 
+    "supportsDistinct" : true, 
+    "supportsQueryWithResultType" : true, 
+    "supportsSqlExpression" : true, 
+    "supportsTimeRelation" : true, 
+    "supportsAdvancedQueryRelated" : true, 
+    "supportsCountDistinct" : true, 
+    "supportsPercentileStatistics" : true, 
+    "supportsApproxPercentileStatistics" : true, 
+    "supportsSpatialAggregationStatistics" : true, 
+    "supportedSpatialAggregationStatistics" : [
+      "EnvelopeAggregate", 
+      "CentroidAggregate", 
+      "ConvexHullAggregate"
+    ], 
+    "supportsLod" : true, 
+    "supportsQueryWithLodSR" : false, 
+    "supportedLodTypes" : [
+      "geohash"
+    ], 
+    "supportsReturningGeometryCentroid" : false, 
+    "supportsReturningGeometryEnvelope" : false, 
+    "supportsQueryWithDatumTransformation" : true, 
+    "supportsCurrentUserQueries" : true, 
+    "supportsHavingClause" : true, 
+    "supportsOutFieldSQLExpression" : true, 
+    "supportsMaxRecordCountFactor" : true, 
+    "supportsTopFeaturesQuery" : true, 
+    "supportsDisjointSpatialRel" : true, 
+    "supportsQueryWithCacheHint" : true, 
+    "supportedOperationsWithCacheHint" : [
+      "query", 
+      "queryTopFilter", 
+      "queryAnalytics", 
+      "queryAttachments", 
+      "queryRelated", 
+      "queryBins", 
+      "queryPivot"
+    ], 
+    "supportsQueryAnalytic" : true, 
+    "supportsQueryPivot" : true, 
+    "supportsQueryBins" : true, 
+    "supportsDefaultSR" : true, 
+    "supportsTranslations" : false, 
+    "supportsAggIds" : true, 
+    "supportsQueryWithCollation" : true, 
+    "supportsISODOW" : true, 
+    "supportsISOWeek" : true, 
+    "supportsFullTextSearch" : true, 
+    "fullTextSearchCapabilities" : {
+      "supportsAccentSensitivity" : true, 
+      "supportsStopWords" : true, 
+      "supportsSearchOperator" : true, 
+      "supportsOperator" : true
+    }
+  }, 
+  "advancedQueryAnalyticCapabilities" : {
+    "supportsLinearRegression" : true, 
+    "supportsTrendlineRegression" : true, 
+    "supportsAsync" : true, 
+    "supportsPercentileAnalytic" : true
+  }, 
+  "queryBinsCapabilities" : {
+    "supportsAsync" : true, 
+    "supportsAutoIntervalBin" : true, 
+    "supportsFixedIntervalBin" : true, 
+    "supportsFixedBoundariesBin" : true, 
+    "supportsDateBin" : true, 
+    "supportsClassificationBin" : true, 
+    "supportsStackBy" : true, 
+    "supportsSplitBy" : true, 
+    "supportsFirstDayOfWeek" : true, 
+    "supportsSnapToData" : true, 
+    "supportsReturnFullIntervalBin" : true, 
+    "supportsReturnStackValueRange" : true, 
+    "supportsNormalization" : true, 
+    "supportedStatisticTypes" : [
+      "COUNT", 
+      "SUM", 
+      "AVG", 
+      "VAR", 
+      "VAR_SAMP", 
+      "VAR_POP", 
+      "STDDEV", 
+      "STDDEV_SAMP", 
+      "STDDEV_POP", 
+      "MIN", 
+      "MAX", 
+      "PERCENTILE_CONT", 
+      "PERCENTILE_DISC", 
+      "APPROX_PERCENTILE_CONT", 
+      "APPROX_PERCENTILE_DISC", 
+      "CentroidAggregate", 
+      "EnvelopeAggregate", 
+      "ConvexHullAggregate"
+    ], 
+    "supportedNormalizationTypes" : [
+      "boxCox", 
+      "field", 
+      "inverse", 
+      "log", 
+      "naturalLog", 
+      "percentOfTotal", 
+      "squareRoot"
+    ]
+  }, 
+  "supportedOperationsWithCollation" : "query,addField,updateField", 
+  "advancedEditingCapabilities" : {
+    "supportedSqlFormatsInCalculate" : [
+      "standard"
+    ], 
+    "supportsAsyncApplyEdits" : true, 
+    "supportsReturnEditResults" : true, 
+    "supportsApplyEditsbyUploadID" : true, 
+    "supportedApplyEditsUploadIDFormats" : "JSON,PBF", 
+    "supportsTranslation" : false, 
+    "supportsMaxTranslations" : 10
+  }, 
+  "infoInEstimates" : [
+    "extent", 
+    "count"
+  ], 
+  "useStandardizedQueries" : true, 
+  "geometryType" : "esriGeometryPoint", 
+  "minScale" : 0, 
+  "maxScale" : 750000, 
+  "extent" : {
+    "xmin" : -20037507.842788249, 
+    "ymin" : -30240971.458386149, 
+    "xmax" : 20037507.842788249, 
+    "ymax" : 30240971.458386149, 
+    "spatialReference" : {
+      "wkid" : 102100, 
+      "latestWkid" : 3857
+    }
+  }, 
+  "spatialReference" : {
+    "wkid" : 102100, 
+    "latestWkid" : 3857
+  }, 
+  "drawingInfo":{"renderer":{"type":"uniqueValue","field1":"OutageType","defaultSymbol":null,"uniqueValueInfos":[{"value":"Not Planned","symbol":{"angle":0,"xoffset":0,"yoffset":0,"type":"esriPMS","url":"9ad0c550-3c7c-40f1-b3a5-c9dfb9b1f169","imageData":"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","contentType":"image/png","width":18.75,"height":18.75},"label":"Not Planned"},{"value":"Planned","symbol":{"angle":0,"xoffset":0,"yoffset":0,"type":"esriPMS","url":"88177e79-68e6-40a8-ae94-f3fbe046dd5b","imageData":"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","contentType":"image/png","width":18.75,"height":18.75},"label":"Planned"}]},"transparency":48}, 
+  "allowGeometryUpdates" : true, 
+  "hasAttachments" : false, 
+  "viewSourceHasAttachments" : false, 
+  "htmlPopupType" : "esriServerHTMLPopupTypeAsHTMLText", 
+  "hasMetadata" : true, 
+  "hasM" : false, 
+  "hasZ" : true, 
+  "enableZDefaults" : true, 
+  "zDefault" : 0, 
+  "objectIdField" : "OBJECTID", 
+  "uniqueIdField" : 
+  {
+    "name" : "OBJECTID", 
+    "isSystemMaintained" : true
+  }, 
+  "globalIdField" : "GlobalID", 
+  "typeIdField" : "", 
+  "collation" : {
+    "locale" : "neutral", 
+    "caseSensitive" : false, 
+    "accentSensitive" : true
+  }, 
+  "fields" : [
+    {
+      "name" : "OBJECTID", 
+      "type" : "esriFieldTypeOID", 
+      "alias" : "OBJECTID", 
+      "sqlType" : "sqlTypeOther", 
+      "nullable" : false, 
+      "editable" : false, 
+      "domain" : null, 
+      "defaultValue" : null
+    }, 
+    {
+      "name" : "UtilityCompany", 
+      "type" : "esriFieldTypeString", 
+      "alias" : "UtilityCompany", 
+      "sqlType" : "sqlTypeOther", 
+      "length" : 255, 
+      "nullable" : true, 
+      "editable" : true, 
+      "domain" : null, 
+      "defaultValue" : null, 
+      "description" : "{\"value\":\"Name of the Utility Company\",\"fieldValueType\":\"typeOrCategory\"}"
+    }, 
+    {
+      "name" : "StartDate", 
+      "type" : "esriFieldTypeDate", 
+      "alias" : "Start Date/Time", 
+      "sqlType" : "sqlTypeOther", 
+      "length" : 8, 
+      "nullable" : true, 
+      "editable" : true, 
+      "domain" : null, 
+      "defaultValue" : null, 
+      "description" : "{\"value\":\"When the outage was first reported by the system\",\"fieldValueType\":\"dateAndTime\"}", 
+      "precision" : 1
+    }, 
+    {
+      "name" : "EstimatedRestoreDate", 
+      "type" : "esriFieldTypeDate", 
+      "alias" : "Estimated Restoration Date/Time", 
+      "sqlType" : "sqlTypeOther", 
+      "length" : 8, 
+      "nullable" : true, 
+      "editable" : true, 
+      "domain" : null, 
+      "defaultValue" : null, 
+      "description" : "{\"value\":\"Estimated time of restoration. (If Available)\",\"fieldValueType\":\"dateAndTime\"}", 
+      "precision" : 1
+    }, 
+    {
+      "name" : "Cause", 
+      "type" : "esriFieldTypeString", 
+      "alias" : "Cause", 
+      "sqlType" : "sqlTypeOther", 
+      "length" : 255, 
+      "nullable" : true, 
+      "editable" : true, 
+      "domain" : null, 
+      "defaultValue" : null, 
+      "description" : "{\"value\":\"Outage cause defined by the utilities. For PSPS outages (PG&E: filter outages containing \\\"public safety\\\", SCE: No identified status yet, SDG&E: filter outages containing \\\"unsafe conditions\\\")\",\"fieldValueType\":\"description\"}"
+    }, 
+    {
+      "name" : "ImpactedCustomers", 
+      "type" : "esriFieldTypeInteger", 
+      "alias" : "Impacted Customers", 
+      "sqlType" : "sqlTypeOther", 
+      "nullable" : true, 
+      "editable" : true, 
+      "domain" : null, 
+      "defaultValue" : null, 
+      "description" : "{\"value\":\"Number of customers impacted. This is power meters and not people. 2.5 people for meter is a general planning conversion.\",\"fieldValueType\":\"countOrAmount\"}"
+    }, 
+    {
+      "name" : "County", 
+      "type" : "esriFieldTypeString", 
+      "alias" : "County", 
+      "sqlType" : "sqlTypeOther", 
+      "length" : 50, 
+      "nullable" : true, 
+      "editable" : true, 
+      "domain" : null, 
+      "defaultValue" : null, 
+      "description" : "{\"value\":\"County only populated if utility designates this in their feed. NOTE: Outages cross county boundaries and only one county is captures per outage.\",\"fieldValueType\":\"locationOrPlaceName\"}"
+    }, 
+    {
+      "name" : "OutageStatus", 
+      "type" : "esriFieldTypeString", 
+      "alias" : "Outage Status", 
+      "sqlType" : "sqlTypeOther", 
+      "length" : 50, 
+      "nullable" : true, 
+      "editable" : true, 
+      "domain" : 
+      {
+        "type" : "codedValue", 
+        "name" : "OutageStatus_Domain", 
+        "codedValues" : [
+          {
+            "name" : "Active", 
+            "code" : "Active"
+          }, 
+          {
+            "name" : "Restored", 
+            "code" : "Restored"
+          }
+        ]
+      }, 
+      "defaultValue" : "Active", 
+      "description" : "{\"value\":\"This is a legacy field. Currently only active outages are captured in this dataset.\",\"fieldValueType\":\"typeOrCategory\"}"
+    }, 
+    {
+      "name" : "OutageType", 
+      "type" : "esriFieldTypeString", 
+      "alias" : "Outage Type", 
+      "sqlType" : "sqlTypeOther", 
+      "length" : 50, 
+      "nullable" : true, 
+      "editable" : true, 
+      "domain" : 
+      {
+        "type" : "codedValue", 
+        "name" : "OutageType_Domain", 
+        "codedValues" : [
+          {
+            "name" : "Planned", 
+            "code" : "Planned"
+          }, 
+          {
+            "name" : "Not Planned", 
+            "code" : "Not Planned"
+          }, 
+          {
+            "name" : "Unknown", 
+            "code" : "Unknown"
+          }
+        ]
+      }, 
+      "defaultValue" : null, 
+      "description" : "{\"value\":\"This field is calculated from a planned or not planned designation by the utility or it is calculated by the CalOES script based on what the cause is.\",\"fieldValueType\":\"typeOrCategory\"}"
+    }, 
+    {
+      "name" : "GlobalID", 
+      "type" : "esriFieldTypeGlobalID", 
+      "alias" : "GlobalID", 
+      "sqlType" : "sqlTypeOther", 
+      "length" : 38, 
+      "nullable" : false, 
+      "editable" : false, 
+      "domain" : null, 
+      "defaultValue" : "NEWID() WITH VALUES"
+    }, 
+    {
+      "name" : "OutageTypeColor", 
+      "type" : "esriFieldTypeString", 
+      "alias" : "OutageTypeColor", 
+      "sqlType" : "sqlTypeOther", 
+      "length" : 50, 
+      "nullable" : true, 
+      "editable" : true, 
+      "domain" : null, 
+      "defaultValue" : null, 
+      "description" : "{\"value\":\"This designates a color per Outage Type use in Operations Dashboard\",\"fieldValueType\":\"typeOrCategory\"}"
+    }, 
+    {
+      "name" : "OutageStatusColor", 
+      "type" : "esriFieldTypeString", 
+      "alias" : "OutageStatusColor", 
+      "sqlType" : "sqlTypeOther", 
+      "length" : 50, 
+      "nullable" : true, 
+      "editable" : true, 
+      "domain" : null, 
+      "defaultValue" : null, 
+      "description" : "{\"value\":\"This is a legacy field. The current dataset only captures active outages.\",\"fieldValueType\":\"typeOrCategory\"}"
+    }, 
+    {
+      "name" : "IncidentId", 
+      "type" : "esriFieldTypeString", 
+      "alias" : "Indicent ID", 
+      "sqlType" : "sqlTypeOther", 
+      "length" : 256, 
+      "nullable" : true, 
+      "editable" : true, 
+      "isViewOverride" : true, 
+      "domain" : null, 
+      "defaultValue" : null
+    }
+  ], 
+  "indexes" : [
+    {
+      "name" : "PK__POWER_OU__F4B70D85961E0774", 
+      "fields" : "OBJECTID", 
+      "isAscending" : true, 
+      "isUnique" : true, 
+      "description" : "", 
+      "indexType" : "Attribute"
+    }, 
+    {
+      "name" : "user_1113.POWER_OUTAGES_POWER_OUTAGE_INCIDENTS_Shape_sidx", 
+      "fields" : "Shape", 
+      "isAscending" : true, 
+      "isUnique" : false, 
+      "description" : "", 
+      "indexType" : "Spatial"
+    }, 
+    {
+      "name" : "GlobalID_Index", 
+      "fields" : "GlobalID", 
+      "isAscending" : false, 
+      "isUnique" : true, 
+      "description" : "", 
+      "indexType" : "Attribute"
+    }, 
+    {
+      "name" : "County_Index", 
+      "fields" : "County", 
+      "isAscending" : true, 
+      "isUnique" : false, 
+      "description" : "County_Index", 
+      "indexType" : "Attribute"
+    }, 
+    {
+      "name" : "UtilityCompany_Index", 
+      "fields" : "UtilityCompany", 
+      "isAscending" : true, 
+      "isUnique" : false, 
+      "description" : "UtilityCompany_Index", 
+      "indexType" : "Attribute"
+    }, 
+    {
+      "name" : "OutageStatus_Index", 
+      "fields" : "OutageStatus", 
+      "isAscending" : true, 
+      "isUnique" : false, 
+      "description" : "OutageStatus_Index", 
+      "indexType" : "Attribute"
+    }, 
+    {
+      "name" : "IncidentId_Index", 
+      "fields" : "IncidentId", 
+      "isAscending" : true, 
+      "isUnique" : false, 
+      "description" : "IncidentId_Index", 
+      "indexType" : "Attribute"
+    }
+  ], 
+  "dateFieldsTimeReference" : {
+    "timeZone" : "UTC", 
+    "timeZoneIANA" : "Etc/UTC", 
+    "respectsDaylightSaving" : false
+  }, 
+  "preferredTimeReference" : null, 
+  "types" : [], 
+  "templates" : [
+    {
+      "name" : "Power Outage Incidents", 
+      "description" : "", 
+      "drawingTool" : "esriFeatureEditToolNone", 
+      "prototype" : {
+        "attributes" : {
+          "IncidentId" : null, 
+          "UtilityCompany" : null, 
+          "StartDate" : null, 
+          "EstimatedRestoreDate" : null, 
+          "Cause" : null, 
+          "ImpactedCustomers" : null, 
+          "County" : null, 
+          "OutageStatus" : "Active", 
+          "OutageType" : null
+        }
+      }
+    }
+  ], 
+  "supportedQueryFormats" : "JSON, geoJSON, PBF", 
+  "supportedAppendFormats" : "sqlite,geoPackage,shapefile,filegdb,featureCollection,geojson,csv,excel,jsonl,featureService,pbf", 
+  "supportedAppendSourceFilterFormats" : "sqlite,geoPackage,shapefile,filegdb,featureService", 
+  "supportedExportFormats" : "csv,shapefile,sqlite,geoPackage,filegdb,featureCollection,geojson,kml,excel,parquet", 
+  "supportedConvertFileFormats" : "JSON,PBF,Parquet", 
+  "supportedConvertContentFormats" : "LayerEditCollection,FeatureCollection", 
+  "supportedSpatialRelationships" : [
+    "esriSpatialRelIntersects", 
+    "esriSpatialRelContains", 
+    "esriSpatialRelCrosses", 
+    "esriSpatialRelEnvelopeIntersects", 
+    "esriSpatialRelIndexIntersects", 
+    "esriSpatialRelOverlaps", 
+    "esriSpatialRelTouches", 
+    "esriSpatialRelWithin", 
+    "esriSpatialRelDisjoint", 
+    "esriSpatialRelRelation"
+  ], 
+  "guidFormat" : "", 
+  "supportsContingentValues" : true, 
+  "supportsEditingContingentValues" : true, 
+  "supportedContingentValuesFormats" : "JSON, PBF", 
+  "supportsFieldGroups" : true, 
+  "supportedSyncDataOptions" : 49412, 
+  "hasStaticData" : true, 
+  "maxRecordCount" : 2000, 
+  "standardMaxRecordCount" : 16000, 
+  "maxIdsCount" : 1000000, 
+  "standardMaxRecordCountNoGeometry" : 32000, 
+  "tileMaxRecordCount" : 8000, 
+  "maxRecordCountFactor" : 1, 
+  "capabilities" : "Query"
+}
