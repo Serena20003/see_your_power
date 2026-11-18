@@ -1,0 +1,20 @@
+{
+  "shortName": "2t",
+  "paramId": 167,
+  "name": "2 metre temperature",
+  "units": "K",
+  "typeOfLevel": "heightAboveGround",
+  "level": 2,
+  "dataDate": 20261116,
+  "dataTime": 0,
+  "startStep": 1,
+  "endStep": 1,
+  "stepUnits": 1,
+  "stepType": "instant",
+  "gridType": "unstructured_grid",
+  "uuidOfHGrid": "a27b8de618c411e4820ab5b098c6a5c0",
+  "md5GridSection": "f68071a8ac9bae4e965822afb963c04f",
+  "numberOfDataPoints": 2949120,
+  "packingType": "grid_ccsds",
+  "uvRelativeToGrid": null
+}

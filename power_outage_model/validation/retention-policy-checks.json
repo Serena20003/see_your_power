@@ -1,0 +1,16 @@
+{
+  "verified_at_utc": "2026-11-17T02:35:45.867408+00:00",
+  "container_tests": "63 passed, 2 warnings in 103.39s (0:01:43)",
+  "docker_image": "sha256:2a4498e3acabe30a1ee8c90a75f6be5fd9e1bbdb504b3a1613e79efd9739a21e",
+  "local_tests": "62 passed, 1 skipped, 2 warnings in 125.59s (0:02:05)",
+  "raw_archive": "disabled",
+  "processed_batch_protection_days": 7,
+  "latest_complete_batch": "protected regardless of age",
+  "cleanup_preview": {
+    "dry_run": true,
+    "eligible_objects": 309
+  },
+  "existing_data_deleted": false,
+  "cloud_deployed": false,
+  "terraform_validate": "passed"
+}
