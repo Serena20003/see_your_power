@@ -47,6 +47,7 @@ def test_watsonx_receives_latest_message(monkeypatch):
     assert result.reply == "Charge your phone now."
     assert settings[0]["temperature"] == 0
     assert settings[0]["max_tokens"] == 2048
+    assert settings[0]["response_format"] == {"type": "json_object"}
     assert seen[0][-1] == {"role": "user", "content": "How do I charge my phone?"}
     assert seen[0][-3:-1] == [
         {"role": "user", "content": "I have a CPAP."},

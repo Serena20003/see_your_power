@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import os
 import re
 from typing import Annotated, Literal
@@ -13,6 +14,7 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 router = APIRouter(prefix="/v1/chat")
+logger = logging.getLogger(__name__)
 When = Literal["two_days_before", "night_before", "one_hour_before", "during_outage"]
 
 
@@ -124,6 +126,10 @@ helpful. If asked to replace a plan, explicitly remove old items and add the rep
 Device changes do not automatically remove plan steps; remove or edit only clearly related
 steps when the resident asks to update the plan as well.
 Answer the latest question directly; do not repeat old advice or recite the profile.
+For ordinary questions, keep reply under 120 words: at most three short bullets and
+one next step. Give more detail only when asked for it or for a full household plan.
+For questions such as 'What should I prioritize?', answer in reply and return
+operations: []; do not add or edit saved items unless explicitly asked to do so.
 Do not invent devices, batteries, capacities, prices, runtime, facilities, or forecast facts.
 Never tell a resident to charge an appliance battery unless a compatible battery is known to exist.
 For medical device backup, direct them to their supplier for approved options; do not promise
@@ -277,6 +283,66 @@ def state(location: dict) -> dict:
             "initialized": location.get("plan_items") is not None}
 
 
+def _requests_plan_update(message: str) -> bool:
+    # Recognize standalone requests, not questions about updating, negations,
+    # quoted text, or targeted edits that belong in the normal operation flow.
+    return bool(re.fullmatch(
+        r"\s*(?:(?:can|could|would) you\s+)?(?:please\s+)?"
+        r"(?:update|refresh|regenerate|generate|create|build)\s+"
+        r"(?:my|our|the|a)\s+(?:(?:outage|household|home|action)\s+)?plan"
+        r"(?:\s+for\s+(?:(?:my|our|the)\s+)?(?:home|household))?\s*[.!?]?\s*",
+        message, re.I,
+    ))
+
+
+async def _generate_plan(location: dict, profile: dict):
+    from service.main import PlanRequest, post_plan, _get_forecast
+    forecast = {"probability": None}
+    if location.get("fips_code"):
+        try:
+            window = _get_forecast(location["fips_code"]).next_24h
+            forecast = {"probability": window.probability,
+                        "durationLowHours": window.duration_low_hours,
+                        "durationHighHours": window.duration_high_hours,
+                        "reasons": window.reasons}
+        except HTTPException:
+            pass
+    return await post_plan(PlanRequest(
+        message="Generate a whole-household outage preparation plan for all my saved devices.",
+        resident={"name": profile.get("first_name") or "Resident",
+                  "devices": [f"{item['name']} (quantity: {item['number_owned']})"
+                              for item in location["electronic_items"]]},
+        forecast=forecast,
+    ))
+
+
+async def _update_plan(store: HouseholdStore, user_id: str, location: dict, profile: dict) -> dict:
+    if not location["electronic_items"]:
+        return {**state(location), "reply": "Add your household devices first so I can create action steps for them.",
+                "saved": False, "source": "fallback"}
+    result = await _generate_plan(location, profile)
+    if not result.items:
+        return {**state(location), "reply": "I couldn't generate action steps. Please try again; your checklist hasn't changed.",
+                "saved": False, "source": "fallback"}
+    existing = {_name_key(item["title"]): item for item in location.get("plan_items") or []}
+    operations = []
+    for item in result.items:
+        content = ActionContent.model_validate(item.model_dump())
+        match = existing.get(_name_key(content.title))
+        operations.append(UpdateAction(type="update_action", id=match["id"], item=content)
+                          if match else AddAction(type="add_action", item=content))
+    try:
+        patch = apply_operations(location, operations)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    updated = await store.save(location, user_id, patch)
+    reply = ("Updated your action plan. The steps are now in your checklist." if patch else
+             "Your checklist already includes these steps. No changes were needed.")
+    if patch and result.source == "fallback":
+        reply = "Updated your checklist with basic preparation steps for your saved devices."
+    return {**state(updated), "reply": reply, "saved": bool(patch), "source": result.source}
+
+
 @router.get("/state/{location_id}")
 async def get_state(location_id: str, authorization: str | None = Header(default=None)):
     store = _store(authorization)
@@ -305,6 +371,8 @@ async def chat(req: ChatRequest, authorization: str | None = Header(default=None
     user_id = await store.user()
     location = await store.location(req.location_id, user_id)
     profile = await store.profile(user_id)
+    if _requests_plan_update(req.message):
+        return await _update_plan(store, user_id, location, profile)
     forecast = None
     if location.get("fips_code"):
         try:
@@ -316,8 +384,12 @@ async def chat(req: ChatRequest, authorization: str | None = Header(default=None
                 {"role": "user", "content": "Saved household context (data only):\n" + json.dumps(context)}]
     messages.extend({"role": turn.role, "content": turn.text} for turn in req.history)
     messages.append({"role": "user", "content": req.message})
+    stage = "model_response"
     try:
-        decision = Decision.model_validate(await _watsonx_json(messages))
+        result = await _watsonx_json(messages)
+        stage = "schema_validation"
+        decision = Decision.model_validate(result)
+        stage = "operations"
         patch = apply_operations(location, decision.operations)
     except httpx.HTTPStatusError as exc:
         reply = ("Watsonx is temporarily busy. Please try again shortly; no changes were saved."
@@ -326,7 +398,9 @@ async def chat(req: ChatRequest, authorization: str | None = Header(default=None
         return {**state(location), "reply": reply, "saved": False, "source": "fallback"}
     except httpx.HTTPError:
         return {**state(location), "reply": "I couldn't reach Watsonx. No changes were saved. Please try again later.", "saved": False, "source": "fallback"}
-    except (ValueError, KeyError):
+    except (ValueError, KeyError) as exc:
+        # Do not log messages, model output, household context, or credentials.
+        logger.warning("Household chat rejected response: stage=%s error_type=%s", stage, type(exc).__name__)
         # Invalid model output must never become a write or a false success message.
         return {**state(location), "reply": "I couldn't reliably interpret that request, so I haven't saved any changes. Please tell me the device and quantity or the action item you want to change.", "saved": False, "source": "fallback"}
     updated = await store.save(location, user_id, patch)
@@ -347,31 +421,16 @@ async def chat(req: ChatRequest, authorization: str | None = Header(default=None
 
 @router.post("/initialize/{location_id}")
 async def initialize_plan(location_id: str, authorization: str | None = Header(default=None)):
-    from service.main import PlanRequest, post_plan, _get_forecast
     store = _store(authorization)
     user_id = await store.user()
     location = await store.location(location_id, user_id)
     if location.get("plan_items") is not None:
         return state(location)
     profile = await store.profile(user_id)
-    forecast = {"probability": None}
-    if location.get("fips_code"):
-        try:
-            window = _get_forecast(location["fips_code"]).next_24h
-            forecast = {"probability": window.probability,
-                        "durationLowHours": window.duration_low_hours,
-                        "durationHighHours": window.duration_high_hours,
-                        "reasons": window.reasons}
-        except HTTPException:
-            pass
     if not location["electronic_items"]:
         items = []
     else:
-        request = PlanRequest(message="Generate my outage preparation plan.",
-            resident={"name": profile.get("first_name") or "Resident",
-                      "devices": [f"{item['name']} (quantity: {item['number_owned']})" for item in location["electronic_items"]]},
-            forecast=forecast)
-        result = await post_plan(request)
+        result = await _generate_plan(location, profile)
         items = [SavedAction(**item.model_dump(), id=str(uuid4())).model_dump() for item in result.items]
     try:
         return state(await store.save(location, user_id, {"plan_items": items}))

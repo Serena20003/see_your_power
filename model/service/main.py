@@ -445,6 +445,9 @@ async def _watsonx_json(messages: list[dict[str, str]]) -> dict:
             "messages": messages,
             "max_tokens": 2048,
             "temperature": 0,
+            # Both assistant routes parse this response as JSON. Prompting alone
+            # allows prose or unescaped newlines that json.loads must reject.
+            "response_format": {"type": "json_object"},
         }
         wx_resp = await client.post(
             wx_url,

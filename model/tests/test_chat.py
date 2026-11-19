@@ -85,6 +85,63 @@ def test_question_uses_saved_context_and_history_without_writing(setup_api):
     assert 'step-1' in seen['messages'][1]['content']
 
 
+@pytest.mark.parametrize('message', ['update my plan', 'Please update my outage plan.', 'Can you regenerate my plan?'])
+def test_plan_update_saves_generated_steps_directly(setup_api, monkeypatch, message):
+    client, seen = setup_api
+    async def generate(request):
+        assert request.resident.devices == ['CPAP machine (quantity: 2)', 'Phone (quantity: 1)']
+        return main.PlanResponse(reply='A long explanation belongs in the checklist.', items=[
+            main.PlanItem(**{k: v for k, v in ACTION.items() if k not in ('id', 'completed')}),
+            main.PlanItem(title='Confirm CPAP backup options', title_en='Confirm CPAP backup options',
+                          when='two_days_before', reason='Ask your supplier about approved backup options.',
+                          reason_en='Ask your supplier about approved backup options.'),
+        ])
+    monkeypatch.setattr(main, 'post_plan', generate)
+    response = ask(client, message)
+    assert response.status_code == 200
+    data = response.json()
+    assert data['saved'] is True
+    assert data['revision'] == 8
+    assert len(data['plan_items']) == 2
+    assert data['plan_items'][0] == ACTION
+    assert data['plan_items'][1]['completed'] is False
+    assert data['plan_items'][1]['id']
+    assert seen['patches'] == [{'plan_items': data['plan_items']}]
+    assert 'A long explanation' not in data['reply']
+    seen['patches'].clear()
+    response = ask(client, message)
+    assert response.json()['saved'] is False
+    assert response.json()['plan_items'] == data['plan_items']
+    assert seen['patches'] == []
+
+
+def test_plan_update_preserves_existing_steps_and_reports_failed_save(setup_api, monkeypatch):
+    client, seen = setup_api
+    async def generate(request):
+        return main.PlanResponse(reply='Generated.', items=[main.PlanItem(
+            title='Review backup options', title_en='Review backup options', when='night_before',
+            reason='Review supplier guidance.', reason_en='Review supplier guidance.')])
+    monkeypatch.setattr(main, 'post_plan', generate)
+    seen['status'] = 500
+    response = ask(client, 'update my plan')
+    assert response.status_code == 502
+    assert 'saved' not in response.json()
+    assert seen['patches'][0]['plan_items'][0] == ACTION
+
+
+@pytest.mark.parametrize('message', ['What should I prioritize?', 'Should I update my plan?',
+                                    'Do not update my plan', 'If I update my plan, what happens?',
+                                    'Explain the phrase "update my plan"'])
+def test_plan_questions_and_negations_do_not_trigger_generation(setup_api, monkeypatch, message):
+    client, seen = setup_api
+    async def generate(request):
+        pytest.fail('A question or negation must not regenerate the checklist')
+    monkeypatch.setattr(main, 'post_plan', generate)
+    response = ask(client, message)
+    assert response.json()['saved'] is False
+    assert seen['patches'] == []
+
+
 @pytest.mark.parametrize('operation', [
     {'type': 'update_address', 'address': 'New address'},
     {'type': 'set_profile', 'first_name': 'Other'},
@@ -216,6 +273,20 @@ def test_busy_model_reports_service_issue_without_saving(setup_api, monkeypatch)
     assert response.json()['saved'] is False
     assert 'temporarily busy' in response.json()['reply']
     assert seen['patches'] == []
+
+
+def test_rejected_model_response_logs_failure_stage_without_household_data(setup_api, monkeypatch, caplog):
+    client, seen = setup_api
+    async def malformed(_messages):
+        return {'reply': 'Private model response', 'operations': 'invalid'}
+    monkeypatch.setattr(main, '_watsonx_json', malformed)
+    response = ask(client, 'Private household message')
+    assert response.json()['source'] == 'fallback'
+    assert response.json()['saved'] is False
+    assert seen['patches'] == []
+    assert 'stage=schema_validation error_type=ValidationError' in caplog.text
+    assert 'Private household message' not in caplog.text
+    assert 'Private model response' not in caplog.text
 
 
 def test_reload_does_not_regenerate_existing_plan_or_reset_completion(setup_api):

@@ -47,6 +47,14 @@ confirm the API key belongs to a user or service ID with access to the project.
 The default model is `ibm/granite-4-h-small`; set `WATSONX_MODEL_ID` only to
 select another model listed as available in your IBM region.
 
+For Cloud Run, configure `SUPABASE_URL` and `SUPABASE_ANON_KEY` on the running
+service using the same Supabase project as the frontend. The frontend's
+`VITE_SUPABASE_*` build arguments do not configure the backend. Set
+`WATSONX_PROJECT_ID` and `WATSONX_REGION` on the service, and bind
+`WATSONX_API_KEY` from Secret Manager. Both deployment commands preserve these
+runtime settings with `--update-env-vars`; replacing the whole environment
+would disconnect storage and the assistant on the next deployment.
+
 ## API endpoints
 
 ### Existing experimental impact model

@@ -68,7 +68,7 @@ gcloud run deploy "${SERVICE}" \
   --region="${REGION}" \
   --image="${IMAGE_BY_DIGEST}" \
   --service-account="${RUNTIME_SA}" \
-  --set-env-vars="WEATHER_CACHE_BUCKET=runway-weather,USE_FIXTURES=false" \
+  --update-env-vars="WEATHER_CACHE_BUCKET=runway-weather,USE_FIXTURES=false" \
   --port=8080 \
   --cpu=1 \
   --memory=512Mi \
