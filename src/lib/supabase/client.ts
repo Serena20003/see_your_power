@@ -12,4 +12,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 /** Typed Supabase client singleton — import this everywhere instead of calling createClient() directly. */
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    // Use implicit flow (hash tokens) instead of PKCE.
+    // PKCE issues a one-time server-side code that gets consumed by email
+    // client link-prefetches (Outlook SafeLinks, Gmail proxy) or React
+    // StrictMode's double-invoke before the user ever clicks — causing the
+    // "Sign-in link expired" error on the first login attempt.
+    flowType: 'implicit',
+  },
+});

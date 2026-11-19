@@ -63,7 +63,9 @@ export async function sendOtp(email: string) {
     email: email.trim(),
     options: {
       shouldCreateUser: true,
-      emailRedirectTo: window.location.origin,
+      // Redirect to /login so the SIGNED_IN handler in LoginPage picks it up.
+      // Avoids landing on AppPage which has no dedicated auth-callback logic.
+      emailRedirectTo: `${window.location.origin}/login`,
     },
   });
 }
@@ -93,4 +95,20 @@ export async function checkProfileComplete(userId: string): Promise<boolean> {
 /** Signs the current user out. */
 export async function signOut() {
   return supabase.auth.signOut();
+}
+
+// ─── Delete account ───────────────────────────────────────────────────────────
+
+/**
+ * Permanently deletes the authenticated user's account.
+ * Calls the `delete_current_user` SECURITY DEFINER RPC which deletes the row
+ * from auth.users; the ON DELETE CASCADE FKs then remove all rows from
+ * public.users and public.locations in the same transaction.
+ * After the RPC succeeds the local Supabase session is signed out.
+ */
+export async function deleteAccount(): Promise<void> {
+  const { error } = await supabase.rpc('delete_current_user');
+  if (error) throw error;
+  // The auth row is gone; sign out locally to clear the session.
+  await supabase.auth.signOut();
 }

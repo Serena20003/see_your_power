@@ -5,7 +5,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { Session } from '@supabase/supabase-js';
 import { InlineLoading } from '@carbon/react';
 import { supabase } from './client';
-import { signOut as authSignOut } from '../../features/auth/authService';
+import { signOut as authSignOut, deleteAccount as authDeleteAccount } from '../../features/auth/authService';
 import { getProfile } from '../../features/profile/profileService';
 import type { UserProfile } from '../../types/database';
 
@@ -16,6 +16,7 @@ interface AuthContextValue {
   profile: UserProfile | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -60,6 +61,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
   }
 
+  async function deleteAccount() {
+    await authDeleteAccount();
+    setSession(null);
+    setProfile(null);
+  }
+
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
@@ -69,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ session, profile, loading, signOut }}>
+    <AuthContext.Provider value={{ session, profile, loading, signOut, deleteAccount }}>
       {children}
     </AuthContext.Provider>
   );

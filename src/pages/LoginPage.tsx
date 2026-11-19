@@ -23,8 +23,11 @@ export default function LoginPage() {
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
 
-  // Error forwarded from the Supabase redirect hash (via App.tsx → navigate).
-  const linkError = searchParams.get('error');
+  // Error from either:
+  // 1. Supabase appending #error=... to the /login redirect (implicit flow).
+  // 2. The ?error=1 query param forwarded from AppPage for legacy hash redirects.
+  const hashParams = new URLSearchParams(window.location.hash.slice(1));
+  const linkError = hashParams.get('error') ?? searchParams.get('error');
 
   // Handle both: existing session on mount AND the magic-link redirect
   // (which fires onAuthStateChange with SIGNED_IN).

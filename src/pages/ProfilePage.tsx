@@ -25,7 +25,7 @@ const NAV_ITEMS = [
 ];
 
 export default function ProfilePage() {
-  const { session, profile, signOut } = useAuth();
+  const { session, profile, signOut, deleteAccount } = useAuth();
   const navigate = useNavigate();
   const { locations, defaultLocation, loading, error, refetch } = useLocations();
 
@@ -33,10 +33,26 @@ export default function ProfilePage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [activeNav, setActiveNav] = useState('contact');
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
 
   async function handleSignOut() {
     await signOut();
     navigate('/');
+  }
+
+  async function handleDeleteAccount() {
+    setDeletingAccount(true);
+    setDeleteAccountError(null);
+    try {
+      await deleteAccount();
+      navigate('/');
+    } catch (err) {
+      setDeleteAccountError(err instanceof Error ? err.message : 'Failed to delete account.');
+      setDeletingAccount(false);
+      setConfirmDeleteAccount(false);
+    }
   }
 
   function handleProfileSaved(_updated: UserProfile) { /* AuthContext refreshes on auth state change */ }
@@ -258,6 +274,57 @@ export default function ProfilePage() {
                 </div>
               </div>
 
+              <div className="profile-row profile-row--delete-account">
+                <span className="profile-row-label">Delete account</span>
+                <span className="profile-row-value" style={{ color: '#6f6f6f', fontSize: '0.875rem' }}>
+                  Permanently removes your account and all associated data.
+                </span>
+                <div className="profile-row-actions">
+                  {!confirmDeleteAccount ? (
+                    <Button
+                      kind="danger--ghost"
+                      size="sm"
+                      onClick={() => { setDeleteAccountError(null); setConfirmDeleteAccount(true); }}
+                    >
+                      Delete account
+                    </Button>
+                  ) : (
+                    <div className="profile-delete-confirm">
+                      <span style={{ fontSize: '0.875rem', color: '#da1e28', fontWeight: 500 }}>
+                        Are you sure? This cannot be undone.
+                      </span>
+                      <Button
+                        kind="danger"
+                        size="sm"
+                        disabled={deletingAccount}
+                        onClick={handleDeleteAccount}
+                      >
+                        {deletingAccount ? 'Deleting…' : 'Yes, delete my account'}
+                      </Button>
+                      <Button
+                        kind="secondary"
+                        size="sm"
+                        disabled={deletingAccount}
+                        onClick={() => setConfirmDeleteAccount(false)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {deleteAccountError && (
+                <InlineNotification
+                  kind="error"
+                  title="Error"
+                  subtitle={deleteAccountError}
+                  hideCloseButton
+                  lowContrast
+                  style={{ marginTop: '0.5rem' }}
+                  onCloseButtonClick={() => setDeleteAccountError(null)}
+                />
+              )}
             </section>
 
           </main>
