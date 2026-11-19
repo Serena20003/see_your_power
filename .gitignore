@@ -4,6 +4,7 @@ dist/
 *.tsbuildinfo
 */.venv/
 .env.local
+gha-creds-*.json
 
 data/
 .bob/

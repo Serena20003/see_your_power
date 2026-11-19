@@ -82,6 +82,8 @@ jobs:
         run: |
           gcloud builds submit . \
             --project="${PROJECT}" \
+            --service-account="projects/${PROJECT}/serviceAccounts/runway-web-builder@${PROJECT}.iam.gserviceaccount.com" \
+            --suppress-logs \
             --config=cloudbuild.web.yaml \
             --substitutions=\
           "SHORT_SHA=${{ steps.sha.outputs.short }},\
@@ -117,6 +119,7 @@ jobs:
             --min-instances=0 \
             --max-instances=1 \
             --revision-suffix="${SHORT}" \
+            --tag=candidate \
             --no-traffic \
             --allow-unauthenticated
 
@@ -125,15 +128,14 @@ jobs:
         run: |
           SHORT="${{ steps.sha.outputs.short }}"
           REVISION="${SERVICE}-${SHORT}"
-          # Cloud Run assigns a URL to the service; test via the service URL
-          # (candidate gets traffic only after promotion, but /healthz is fast)
-          SERVICE_URL=$(gcloud run services describe "${SERVICE}" \
+          # A tagged URL reaches this exact revision before traffic promotion.
+          CANDIDATE_URL=$(gcloud run services describe "${SERVICE}" \
             --project="${PROJECT}" \
             --region="${REGION}" \
-            --format="value(status.url)")
+            --format=json | python -c 'import json,sys; print(next(t["url"] for t in json.load(sys.stdin)["status"]["traffic"] if t.get("tag")=="candidate"))')
 
           HTTP_STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
-            --max-time 30 "${SERVICE_URL}/healthz" || echo "000")
+            --max-time 30 "${CANDIDATE_URL}/healthz" || echo "000")
 
           if [[ "$HTTP_STATUS" != "200" ]]; then
             echo "Smoke test failed (HTTP ${HTTP_STATUS}). Production traffic unchanged."

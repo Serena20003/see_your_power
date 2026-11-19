@@ -22,6 +22,7 @@ model/.pytest_cache/
 # Local environment files — never upload secrets
 .env
 .env.*
+gha-creds-*.json
 *.local
 
 # Large model/data directories — not needed in the web runtime
