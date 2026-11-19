@@ -69,8 +69,20 @@ jobs:
         id: auth
         uses: google-github-actions/auth@12060449e87204eca501a11f2f7f1483024afff0  # v2
         with:
+          project_id: runway-515115
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: runway-515115
+
+      - name: Verify build access
+        run: |
+          gcloud auth print-access-token > /dev/null
+          gcloud storage buckets describe gs://runway-515115_cloudbuild \
+            --project="${PROJECT}" --format='value(name)'
 
       # Derive a short SHA once; use it everywhere in this job
       - name: Set short SHA
