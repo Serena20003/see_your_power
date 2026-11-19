@@ -130,11 +130,21 @@ async def _not_found_handler(request: Request, exc: Exception):
     Unknown /v1/* API paths return JSON 404.
     All other unmatched paths return the SPA index.html for client-side routing.
     """
-    if request.url.path.startswith("/v1/"):
+    if request.url.path == "/v1" or request.url.path.startswith("/v1/"):
         return JSONResponse(
             status_code=404,
             content={"detail": f"API route not found: {request.url.path}"},
         )
+    # Vite copies public/ to dist/. Serve those files before the SPA fallback,
+    # keeping GeoJSON map data and images distinct from client-side routes.
+    root = _DIST_DIR.resolve()
+    target = (root / request.url.path.lstrip("/")).resolve()
+    if not target.is_relative_to(root):
+        return JSONResponse(status_code=404, content={"detail": "Not found"})
+    if target.is_file():
+        return FileResponse(target)
+    if target.suffix or request.url.path.startswith("/data/"):
+        return JSONResponse(status_code=404, content={"detail": "Static file not found"})
     index = _DIST_DIR / "index.html"
     if index.is_file():
         return FileResponse(str(index))
