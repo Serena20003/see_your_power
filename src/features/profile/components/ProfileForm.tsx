@@ -62,7 +62,7 @@ export default function ProfileForm({ profile, onSaved }: ProfileFormProps) {
         disabled={saving}
         autoComplete="family-name"
       />
-      <Button type="submit" disabled={saving || !firstName.trim() || !lastName.trim()}>
+      <Button type="submit" size="sm" disabled={saving || !firstName.trim() || !lastName.trim()}>
         {saving ? 'Saving…' : 'Save'}
       </Button>
 

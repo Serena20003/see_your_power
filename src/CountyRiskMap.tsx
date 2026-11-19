@@ -157,11 +157,12 @@ export default function CountyRiskMap({
     const initial = COUNTIES[latest.current.activeFips] ?? COUNTIES["06037"];
     const map = new mapboxgl.Map({
       accessToken,
-      container:          containerRef.current,
-      style:              CARBON_G10_STYLE,
-      center:             initial === COUNTIES["06037"] ? [-117.6, 33.9] : [initial.lon, initial.lat],
-      zoom:               6.6,
-      attributionControl: false,
+      container:            containerRef.current,
+      style:                CARBON_G10_STYLE,
+      center:               initial === COUNTIES["06037"] ? [-117.6, 33.9] : [initial.lon, initial.lat],
+      zoom:                 6.6,
+      attributionControl:   false,
+      preserveDrawingBuffer: true,   // needed for pixel-sampling raster layers on click
     });
     map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "bottom-right");
     map.addControl(new mapboxgl.AttributionControl({ compact: true }),     "bottom-right");
@@ -365,10 +366,92 @@ export default function CountyRiskMap({
       });
 
       // ── Click handler ─────────────────────────────────────────────────────
-      const CLICK_LAYERS = ["county-risk-dots", "county-risk-values", "county-risk-names", "experimental-impact-fill"];
+      const CLICK_LAYERS = [
+        "county-risk-dots", "county-risk-values", "county-risk-names",
+        "experimental-impact-fill", "eaglei-impact-fill", "cec-lines",
+      ];
+      const popup = new mapboxgl.Popup({ closeButton: true, closeOnClick: false, maxWidth: "220px" });
+
+      /** Sample the RGBA of the rendered pixel at a map point. */
+      function samplePixel(point: mapboxgl.Point): [number, number, number, number] {
+        const canvas = map.getCanvas();
+        const gl = canvas.getContext("webgl") ?? canvas.getContext("webgl2");
+        if (!gl) return [0, 0, 0, 0];
+        const dpr = window.devicePixelRatio || 1;
+        const x = Math.round(point.x * dpr);
+        const y = Math.round((canvas.height / dpr - point.y) * dpr); // WebGL y is flipped
+        const buf = new Uint8Array(4);
+        gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+        return [buf[0], buf[1], buf[2], buf[3]];
+      }
+
+      /** Map a sampled RGBA to a DWD weather risk label. Returns null if the pixel is transparent. */
+      function weatherRiskLabel(rgba: [number, number, number, number]): string | null {
+        const [r, g, b, a] = rgba;
+        if (a < 20) return null; // transparent — no data at this point
+        // Palette bands (see heatmap colour stops in installWeather output):
+        // Low    ≈ blue   (0,20,220)  → high B, low R
+        // Mod    ≈ cyan   (0,180,200) → high G+B, low R
+        // High   ≈ yellow (230,230,0) → high R+G, low B
+        // Severe ≈ red    (220,30,30) → high R, low G+B
+        if (r > 150 && g < 80 && b < 80)  return "Severe";
+        if (r > 150 && g > 150 && b < 80) return "High";
+        if (r < 60  && g > 100)            return "Moderate";
+        return "Low";
+      }
+
       map.on("click", (event) => {
         const hit = map.queryRenderedFeatures(event.point, { layers: CLICK_LAYERS.filter(id => map.getLayer(id)) })[0];
-        const fips = (hit?.properties?.fips ?? hit?.properties?.GEOID) as string | undefined;
+
+        // ── DWD weather raster (not queryable via features) ────────────────
+        if (!hit && rasterVisibility.current.weather && map.getLayer("weather-risk-raster")) {
+          const rgba  = samplePixel(event.point);
+          const label = weatherRiskLabel(rgba);
+          if (label) {
+            popup
+              .setLngLat(event.lngLat)
+              .setHTML(`<strong style="font-size:12px">DWD Weather Risk</strong><br/><span style="font-size:11px;color:#525252">${label} at this location</span>`)
+              .addTo(map);
+          } else {
+            popup.remove();
+          }
+          return;
+        }
+
+        if (!hit) { popup.remove(); return; }
+
+        const layerId = hit.layer?.id;
+        const props   = hit.properties ?? {};
+
+        // ── CEC transmission line ──────────────────────────────────────────
+        if (layerId === "cec-lines") {
+          const lineType = props.Type === "OH" ? "Overhead (OH)" : (props.Type ?? "Unknown type");
+          const name     = props.Name ?? props.name ?? "";
+          popup
+            .setLngLat(event.lngLat)
+            .setHTML(`<strong style="font-size:12px">${name || "Transmission line"}</strong><br/><span style="font-size:11px;color:#525252">${lineType}</span>`)
+            .addTo(map);
+          return;
+        }
+
+        // ── EAGLE-I county fill ────────────────────────────────────────────
+        if (layerId === "eaglei-impact-fill") {
+          const countyName = props.NAME ?? props.name ?? props.GEOID ?? "";
+          const impact     = props.impact != null ? Math.round(Number(props.impact)).toLocaleString() : null;
+          popup
+            .setLngLat(event.lngLat)
+            .setHTML(
+              `<strong style="font-size:12px">${countyName} County</strong><br/>` +
+              `<span style="font-size:11px;color:#525252">EAGLE-I 2018 impact: ${impact != null ? `≈${impact} customers` : "no data"}</span>`,
+            )
+            .addTo(map);
+          const fips = props.GEOID as string | undefined;
+          if (fips) latest.current.onSelectFips(fips);
+          return;
+        }
+
+        // ── Point markers / experimental-impact-fill → select county ──────
+        const fips = (props.fips ?? props.GEOID) as string | undefined;
         if (fips) latest.current.onSelectFips(fips);
       });
       CLICK_LAYERS.forEach((layer) => {

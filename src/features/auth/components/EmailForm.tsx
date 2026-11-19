@@ -82,7 +82,7 @@ export default function EmailForm({ onOtpSent }: Props) {
       <Button
         type="submit"
         disabled={loading}
-        style={{ marginTop: '1rem', width: '100%' }}
+        style={{ marginTop: '1.5rem', width: '100%' }}
       >
         {loading ? 'Checking…' : 'Continue'}
       </Button>

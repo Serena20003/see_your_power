@@ -25,6 +25,19 @@ import { formatForecastAge, formatProbability, statusBadgeText } from "./api";
 import type { CountyForecast, ForecastWindow } from "./types";
 
 // -------------------------------------------------------------------------
+// Helpers
+// -------------------------------------------------------------------------
+
+/** Returns a hex color for a 0–1 probability (matches the map dot palette). */
+function riskColor(prob: number | null): string {
+  if (prob === null) return "#8d8d8d";
+  if (prob < 0.35)   return "#198038"; // low    – green
+  if (prob < 0.60)   return "#b28600"; // medium – amber
+  if (prob < 0.80)   return "#ff832b"; // high   – orange
+  return "#da1e28";                    // severe – red
+}
+
+// -------------------------------------------------------------------------
 // Window tab
 // -------------------------------------------------------------------------
 
@@ -57,7 +70,14 @@ function WindowTabs({ forecast, activeKey, onSelect }: WindowTabsProps) {
             className={key === activeKey ? "selected" : ""}
             onClick={() => onSelect(key)}
           >
-            <span>{w.window_label}</span>
+            <span className="window-tab-label">
+              <span
+                className="window-tab-dot"
+                style={{ background: riskColor(prob) }}
+                aria-hidden="true"
+              />
+              {w.window_label}
+            </span>
             <strong>{pct}</strong>
             <span>
               {impact != null ? "estimated impact" : prob !== null
@@ -274,9 +294,14 @@ interface ForecastPanelProps {
   flyToCoords?: { lat: number; lon: number } | null;
   /** Overlay rendered inside the map canvas (search bar, location picker). */
   mapOverlay?: React.ReactNode;
+  /**
+   * When provided (logged-in users), rendered in the right column beside the map.
+   * The forecast detail (tabs + score card) is then shown below the map row.
+   */
+  rightSlot?: React.ReactNode;
 }
 
-export default function ForecastPanel({ fips, onFipsChange, flyToCoords, mapOverlay }: ForecastPanelProps) {
+export default function ForecastPanel({ fips, onFipsChange, flyToCoords, mapOverlay, rightSlot }: ForecastPanelProps) {
   const { state, refetch } = useForecast(fips);
   const [activeWindow, setActiveWindow] =
     useState<typeof WINDOW_KEYS[number]>("next_24h");
@@ -285,6 +310,61 @@ export default function ForecastPanel({ fips, onFipsChange, flyToCoords, mapOver
   const isStale = state.phase === "stale";
   const forecast =
     state.phase === "success" || state.phase === "stale" ? state.data : null;
+
+  const forecastDetail = (
+    <>
+      <div className="forecast-heading">
+        <div>
+          <span className="section-kicker">COUNTY FORECAST</span>
+          <h1 id="forecast-title">Your power forecast</h1>
+          <p>
+            Experimental county customer impact across three UTC days.
+            Live weather and canopy are separate contributing-factor layers.
+          </p>
+        </div>
+      </div>
+
+      {/* Window tabs */}
+      {forecast && (
+        <WindowTabs
+          forecast={forecast}
+          activeKey={activeWindow}
+          onSelect={setActiveWindow}
+        />
+      )}
+
+      {/* Main card */}
+      {isLoading && <ForecastSkeleton />}
+      {state.phase === "error" && (
+        <ForecastError message={state.message} onRetry={refetch} />
+      )}
+      {forecast && (
+        <ForecastCard
+          forecast={forecast}
+          windowKey={activeWindow}
+          isStale={isStale}
+        />
+      )}
+
+      {/* How it works accordion */}
+      <details className="model-flow" style={{ padding: "0 24px" }}>
+        <summary>How this forecast becomes your plan</summary>
+        <div>
+          <p>
+            <strong>Historical inputs</strong> — 2018 EAGLE-I county customer-outage records, county geometry and calendar dates. Within-county training locations are simulated.
+          </p>
+          <ArrowRight size={18} aria-hidden="true" />
+          <p>
+            <strong>Experimental estimate</strong> — a fitted gradient-boosted model aggregates representative point estimates into typical county customer impact. It does not estimate outage probability or duration. Weather and canopy are separate layers.
+          </p>
+          <ArrowRight size={18} aria-hidden="true" />
+          <p>
+            <strong>Your plan</strong> — use your saved household inventory to prepare. Review current weather and official outage notices alongside this experimental baseline.
+          </p>
+        </div>
+      </details>
+    </>
+  );
 
   return (
     <section className="forecast-section" aria-labelledby="forecast-title">
@@ -298,8 +378,9 @@ export default function ForecastPanel({ fips, onFipsChange, flyToCoords, mapOver
         />
       )}
 
+      {/* Row 1: map (left) + plan or forecast detail (right) */}
       <div className="forecast-layout">
-        {/* LEFT: map — always shown, synced to active window */}
+        {/* LEFT: map */}
         <div className="forecast-map-col">
           <CountyRiskMap
             activeFips={fips}
@@ -311,60 +392,18 @@ export default function ForecastPanel({ fips, onFipsChange, flyToCoords, mapOver
           />
         </div>
 
-        {/* RIGHT: heading + tabs + card */}
+        {/* RIGHT: plan slot (logged-in) or forecast detail (logged-out) */}
         <div className="forecast-detail-col">
-          <div className="forecast-heading">
-            <div>
-              <span className="section-kicker">COUNTY FORECAST</span>
-              <h1 id="forecast-title">Your power forecast</h1>
-              <p>
-                Experimental county customer impact across three UTC days.
-                Live weather and canopy are separate contributing-factor layers.
-              </p>
-            </div>
-          </div>
-
-          {/* Window tabs */}
-          {forecast && (
-            <WindowTabs
-              forecast={forecast}
-              activeKey={activeWindow}
-              onSelect={setActiveWindow}
-            />
-          )}
-
-          {/* Main card */}
-          {isLoading && <ForecastSkeleton />}
-          {state.phase === "error" && (
-            <ForecastError message={state.message} onRetry={refetch} />
-          )}
-          {forecast && (
-            <ForecastCard
-              forecast={forecast}
-              windowKey={activeWindow}
-              isStale={isStale}
-            />
-          )}
-
-          {/* How it works accordion */}
-          <details className="model-flow" style={{ padding: "0 24px" }}>
-            <summary>How this forecast becomes your plan</summary>
-            <div>
-              <p>
-                <strong>Historical inputs</strong> — 2018 EAGLE-I county customer-outage records, county geometry and calendar dates. Within-county training locations are simulated.
-              </p>
-              <ArrowRight size={18} aria-hidden="true" />
-              <p>
-                <strong>Experimental estimate</strong> — a fitted gradient-boosted model aggregates representative point estimates into typical county customer impact. It does not estimate outage probability or duration. Weather and canopy are separate layers.
-              </p>
-              <ArrowRight size={18} aria-hidden="true" />
-              <p>
-                <strong>Your plan</strong> — use your saved household inventory to prepare. Review current weather and official outage notices alongside this experimental baseline.
-              </p>
-            </div>
-          </details>
+          {rightSlot ?? forecastDetail}
         </div>
       </div>
+
+      {/* Row 2: forecast detail — only shown when plan occupies the right slot */}
+      {rightSlot && (
+        <div className="forecast-below-row">
+          {forecastDetail}
+        </div>
+      )}
     </section>
   );
 }

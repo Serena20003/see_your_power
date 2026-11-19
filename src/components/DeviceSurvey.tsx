@@ -201,7 +201,7 @@ export default function DeviceSurvey({ items, onChange }: DeviceSurveyProps) {
       )}
 
       {/* ── Add device button ──────────────────────────────────────────────── */}
-      <div>
+      <div style={{ marginTop: '0.25rem' }}>
         <Button
           kind="tertiary"
           size="sm"

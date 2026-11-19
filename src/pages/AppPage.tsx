@@ -324,121 +324,116 @@ export default function AppPage() {
             )}
           </div>
 
-          {/* ── Forecast section ── */}
+          {/* ── Forecast + plan layout ──
+              Logged-in:  map (left) | plan checklist (right), forecast detail below
+              Logged-out: map (left) | forecast detail (right)
+          ── */}
           <div id="forecast">
             <ForecastPanel
               fips={fips}
               onFipsChange={setFips}
               flyToCoords={flyToCoords}
               mapOverlay={mapOverlay}
+              rightSlot={session !== null ? (
+                <div className="plan-side-panel" id="my-plan">
+                  <div className="plan-side-header">
+                    <span className="section-kicker">YOUR OUTAGE PLAN</span>
+                    <h2 id="plan-title">
+                      {activeLocation
+                        ? `Plan for ${activeLocation.name}`
+                        : "Your outage preparation plan"}
+                    </h2>
+                  </div>
+
+                  <div className="plan-side-body">
+                    {/* Loading state */}
+                    {planLoading && (
+                      <div style={{ padding: "16px 0" }}>
+                        <InlineLoading description="Generating your plan…" />
+                      </div>
+                    )}
+
+                    {/* No location selected yet */}
+                    {!planLoading && !activeLocation && !locLoading && (
+                      <p className="panel-description">
+                        {locations.length === 0
+                          ? "Add a location in your profile to generate a personalized outage plan."
+                          : "Select a saved location above to see your plan."}
+                      </p>
+                    )}
+
+                    {/* No devices */}
+                    {!planLoading && activeLocation && (!activeLocation.electronic_items?.length) && (
+                      <p className="panel-description">
+                        No devices saved for <strong>{activeLocation.name}</strong>. Ask the assistant to add electronic devices, or edit them in{" "}
+                        <Link to="/profile">your profile</Link>.
+                      </p>
+                    )}
+
+                    {/* Plan error */}
+                    {planError && !planLoading && (
+                      <p className="panel-description" style={{ color: "#da1e28" }}>{planError}</p>
+                    )}
+
+                    {!planLoading && !planError && activeLocation && planItems.length === 0 && (
+                      <p className="panel-description">Your action list is empty. Ask the assistant to create a plan or add a step.</p>
+                    )}
+
+                    {/* Plan items checklist */}
+                    {!planLoading && planItems.length > 0 && (
+                      <>
+                        {/* Progress bar */}
+                        <div className="plan-progress" aria-label={`${checkedCount} of ${totalCount} steps completed`}>
+                          <span style={{ width: totalCount > 0 ? `${(checkedCount / totalCount) * 100}%` : "0%" }} />
+                        </div>
+                        <p className="panel-meta" style={{ color: "#6f6f6f", fontSize: 11, marginBottom: 8 }}>
+                          {checkedCount} / {totalCount} steps completed
+                        </p>
+
+                        <div className="plan-items">
+                          {planItems.map((item, idx) => {
+                            const key = item.id;
+                            const checked = item.completed;
+                            return (
+                              <div key={key} className={`plan-item${checked ? " is-done" : ""}`}>
+                                <Checkbox
+                                  id={`plan-item-${idx}`}
+                                  labelText={
+                                    <span className="plan-copy">
+                                      <span className="plan-meta">{whenLabel(item.when)}</span>
+                                      <strong>{item.title_en ?? item.title}</strong>
+                                      {item.reason_en || item.reason ? (
+                                        <span className="plan-why">
+                                          <span>WHY</span>
+                                          {item.reason_en ?? item.reason}
+                                        </span>
+                                      ) : null}
+                                    </span>
+                                  }
+                                  checked={checked}
+                                  disabled={completionSaving || chatSending}
+                                  onChange={(_: unknown, { checked: c }: { checked: boolean }) => {
+                                    void toggleCompletion(item.id, c);
+                                  }}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <div className="plan-note">
+                          <Information size={16} />
+                          <span>
+                            Plan generated from your saved devices. Use the assistant (bottom-right) to update your device list.
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : undefined}
             />
           </div>
-
-          {/* ── Plan panel (authenticated) ── */}
-          {session !== null && (
-            <section className="plan-section" aria-labelledby="plan-title" id="my-plan">
-              <div className="section-bridge">
-                <div>
-                  <span className="section-kicker">YOUR OUTAGE PLAN</span>
-                  <h2 id="plan-title">
-                    {activeLocation
-                      ? `Plan for ${activeLocation.name}`
-                      : "Your outage preparation plan"}
-                  </h2>
-                </div>
-              </div>
-
-              <Tile className="plan-card">
-                {/* Loading state */}
-                {planLoading && (
-                  <div style={{ padding: "24px 0" }}>
-                    <InlineLoading description="Generating your plan…" />
-                  </div>
-                )}
-
-                {/* No location selected yet */}
-                {!planLoading && !activeLocation && !locLoading && (
-                  <p className="panel-description">
-                    {locations.length === 0
-                      ? "Add a location in your profile to generate a personalized outage plan."
-                      : "Select a saved location above to see your plan."}
-                  </p>
-                )}
-
-                {/* No devices */}
-                {!planLoading && activeLocation && (!activeLocation.electronic_items?.length) && (
-                  <p className="panel-description">
-                    No devices saved for <strong>{activeLocation.name}</strong>. Ask the assistant to add electronic devices, or edit them in{" "}
-                    <Link to="/profile">your profile</Link>.
-                  </p>
-                )}
-
-                {/* Plan error */}
-                {planError && !planLoading && (
-                  <p className="panel-description" style={{ color: "#da1e28" }}>{planError}</p>
-                )}
-
-                {!planLoading && !planError && activeLocation && planItems.length === 0 && (
-                  <p className="panel-description">Your action list is empty. Ask the assistant to create a plan or add a step.</p>
-                )}
-
-                {/* Plan items checklist */}
-                {!planLoading && planItems.length > 0 && (
-                  <>
-                    <p className="panel-description">
-                      Personalized for {activeLocation?.name ?? "your location"} based on your saved devices.
-                    </p>
-
-                    {/* Progress bar */}
-                    <div className="plan-progress" aria-label={`${checkedCount} of ${totalCount} steps completed`}>
-                      <span style={{ width: totalCount > 0 ? `${(checkedCount / totalCount) * 100}%` : "0%" }} />
-                    </div>
-                    <p className="panel-meta" style={{ color: "#6f6f6f", fontSize: 11, marginBottom: 8 }}>
-                      {checkedCount} / {totalCount} steps completed
-                    </p>
-
-                    <div className="plan-items">
-                      {planItems.map((item, idx) => {
-                        const key = item.id;
-                        const checked = item.completed;
-                        return (
-                          <div key={key} className={`plan-item${checked ? " is-done" : ""}`}>
-                            <Checkbox
-                              id={`plan-item-${idx}`}
-                              labelText={
-                                <span className="plan-copy">
-                                  <span className="plan-meta">{whenLabel(item.when)}</span>
-                                  <strong>{item.title_en ?? item.title}</strong>
-                                  {item.reason_en || item.reason ? (
-                                    <span className="plan-why">
-                                      <span>WHY</span>
-                                      {item.reason_en ?? item.reason}
-                                    </span>
-                                  ) : null}
-                                </span>
-                              }
-                              checked={checked}
-                              disabled={completionSaving || chatSending}
-                              onChange={(_: unknown, { checked: c }: { checked: boolean }) => {
-                                void toggleCompletion(item.id, c);
-                              }}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <div className="plan-note">
-                      <Information size={16} />
-                      <span>
-                        Plan generated from your saved devices. Use the assistant (bottom-right) to update your device list.
-                      </span>
-                    </div>
-                  </>
-                )}
-              </Tile>
-            </section>
-          )}
         </main>
 
         <footer className="site-footer">

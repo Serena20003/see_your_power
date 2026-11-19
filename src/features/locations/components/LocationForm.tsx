@@ -163,7 +163,7 @@ export default function LocationForm({
 
         <DeviceSurvey items={electronicItems} onChange={setElectronicItems} />
 
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #e0e0e0' }}>
           <Button type="submit" disabled={saving}>
             {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Add location'}
           </Button>

@@ -118,15 +118,15 @@ const pageStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   backgroundColor: '#f4f4f4',
-  padding: '2rem 1rem',
+  padding: '2rem 1.5rem',
 };
 
 const cardStyle: React.CSSProperties = {
   background: '#ffffff',
-  padding: '2rem',
+  padding: '3rem 3.5rem',
   width: '100%',
-  maxWidth: '400px',
-  boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+  maxWidth: '480px',
+  boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
 };
 
 const containerStyle: React.CSSProperties = {
@@ -137,15 +137,17 @@ const containerStyle: React.CSSProperties = {
 };
 
 const headingStyle: React.CSSProperties = {
-  fontSize: '1.5rem',
+  fontSize: '1.75rem',
   fontWeight: 600,
   marginBottom: '0.5rem',
+  letterSpacing: '-0.02em',
 };
 
 const subheadStyle: React.CSSProperties = {
   color: '#525252',
-  fontSize: '0.875rem',
-  marginBottom: '1.5rem',
+  fontSize: '0.9375rem',
+  marginBottom: '2rem',
+  lineHeight: 1.5,
 };
 
 const backLinkStyle: React.CSSProperties = {
@@ -153,8 +155,8 @@ const backLinkStyle: React.CSSProperties = {
   border: 'none',
   color: '#525252',
   cursor: 'pointer',
-  fontSize: '0.8125rem',
-  marginTop: '1rem',
+  fontSize: '0.875rem',
+  marginTop: '1.25rem',
   padding: 0,
   textDecoration: 'underline',
 };
