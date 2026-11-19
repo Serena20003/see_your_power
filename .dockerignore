@@ -40,3 +40,7 @@ docs/
 # Bob / tooling
 .bob/
 .superpowers/
+
+# Keep packaged county boundaries and public map overlays in the web image.
+!public/data/
+!public/data/**

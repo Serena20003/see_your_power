@@ -40,3 +40,7 @@ docs/
 # Bob / tooling
 .bob/
 .superpowers/
+
+# Vite public assets are required by the map, unlike private data directories.
+!public/data/
+!public/data/**
