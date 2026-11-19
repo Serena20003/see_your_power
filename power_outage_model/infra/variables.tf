@@ -4,6 +4,11 @@ variable "region" {
   default = "us-west1"
 }
 variable "bucket_name" { type = string }
+variable "map_bucket_name" {
+  type        = string
+  default     = null
+  description = "Optional public bucket for derived canopy tiles and weather map images; scientific objects stay private"
+}
 variable "image" {
   type        = string
   description = "Immutable linux/amd64 image digest built from power_outage_model/Dockerfile"

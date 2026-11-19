@@ -21,6 +21,7 @@ def parser():
         if name=='poll-run':r.add_argument('--routes',required=True)
     s=sub.add_parser('build-static');s.add_argument('--config',required=True);s.add_argument('--output',required=True);s.add_argument('--grid-config')
     s=sub.add_parser('recalculate');s.add_argument('--weather-manifest',required=True);s.add_argument('--static-manifest');s.add_argument('--risk-config',required=True);s.add_argument('--output',required=True)
+    s.add_argument('--allow-static-gaps',action='store_true',default=None)
     s=sub.add_parser('catalog');s.add_argument('--routes',required=True);s.add_argument('--cache-dir',required=True);s.add_argument('--output',required=True)
     s=sub.add_parser('gc');s.add_argument('--output',required=True);s.add_argument('--apply',action='store_true')
     s=sub.add_parser('make-fixture');s.add_argument('--output',required=True);s.add_argument('--cutoff',default='2026-11-16T06:00:00+00:00')
@@ -50,7 +51,7 @@ def main(argv=None):
         m=build_static(config,grid,store);print(canonical(m).decode());return
     if args.command=='recalculate':
         m=read_json(store,args.weather_manifest)
-        result=recalculate(m,store,load_risk(args.risk_config),static_manifest=args.static_manifest)
+        result=recalculate(m,store,load_risk(args.risk_config),static_manifest=args.static_manifest,allow_static_gaps=args.allow_static_gaps)
     else:
         cfg=load_config(args.config)
         if args.command=='poll-run':cfg=cfg.model_copy(update={'catalog':records})

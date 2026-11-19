@@ -1,10 +1,12 @@
 import hashlib
 import json
+import math
 from pathlib import Path
 import tempfile
 import numpy as np
 import rasterio
-from shapely.geometry import box,shape,mapping
+import shapely
+from shapely.geometry import box,shape,mapping,GeometryCollection
 from shapely.ops import transform,unary_union
 from pyproj import Transformer
 from .contracts import StaticContext,StaticManifest,GridSpec,NODATA,canonical,digest
@@ -18,10 +20,39 @@ ASSET_BANDS=('operational_route_km','overhead_route_km','underground_route_km','
 COVERAGE_BANDS=('analysis_land','environmental_inputs','transmission_inventory')
 
 
+def supported_land(context,*,allow_gaps=False):
+    supported=context.analysis_mask&(context.coverage[1]==1)
+    if not allow_gaps and np.any(context.analysis_mask&~supported):raise ValueError('insufficient canopy coverage')
+    if not supported.any():raise ValueError('no land cells have sufficient environmental coverage')
+    return supported
+
+
+def coverage_summary(context):
+    supported=context.analysis_mask&(context.coverage[1]==1)
+    return {'analysis_land_cells':int(context.analysis_mask.sum()),'scored_land_cells':int(supported.sum()),
+        'missing_environment_cells':int(np.sum(context.analysis_mask&~supported)),
+        'minimum_valid_land_fraction':.95}
+
+
 def cells(grid):
     return [box(grid.west+c*grid.resolution,grid.north-(r+1)*grid.resolution,
         grid.west+(c+1)*grid.resolution,grid.north-r*grid.resolution)
         for r in range(grid.height) for c in range(grid.width)]
+
+
+def clip_land_cells(target_cells,land):
+    # Prepared predicates avoid intersecting the full coastline for inland and
+    # offshore cells. Boundary cells still use the exact original geometry.
+    shapely.prepare(land)
+    west,south,east,north=land.bounds
+    # Exact coarse partitions make coastal intersections local instead of
+    # repeatedly scanning every vertex of the continental mainland polygon.
+    pieces=[land.intersection(box(x,y,x+5,y+5))
+        for x in range(math.floor(west/5)*5,math.ceil(east),5)
+        for y in range(math.floor(south/5)*5,math.ceil(north),5)]
+    tree=shapely.STRtree(pieces)
+    return [c if land.covers(c) else unary_union([c.intersection(pieces[i]) for i in tree.query(c)])
+        if land.intersects(c) else GeometryCollection() for c in target_cells]
 
 
 def save_static(context,sources,recipe,store,*,fixture=False,artifacts=None):
@@ -89,9 +120,9 @@ def build_static(config,grid,store):
     with rasterio.open(sources['canopy']['path']) as src:
         if src.crs.to_string()!=sources['canopy']['crs']:raise ValueError('canopy source CRS does not match pin')
         project=Transformer.from_crs(4326,src.crs,always_xy=True).transform
-    land_cells=[transform(project,c.intersection(land).segmentize(.005)) for c in target_cells]
+    land_cells=[transform(project,c.segmentize(.005)) for c in clip_land_cells(target_cells,land)]
     canopy,valid=aggregate_canopy(sources['canopy']['path'],land_cells,
-        valid_range=tuple(config['canopy_valid_range']),special_codes=tuple(config['canopy_special_codes']))
+        valid_range=tuple(config['canopy_valid_range']),special_codes=tuple(config['canopy_special_codes']),workers=config.get('canopy_workers',1))
     features=json.loads(Path(sources['transmission']['path']).read_text())['features']
     exposure,pilot_cov,inventory=transmission_exposure(features,target_cells,pilot,assessed)
     mask=np.asarray([not c.is_empty and c.area>0 for c in land_cells])

@@ -9,6 +9,39 @@ from raster_pipeline.static import build_static,load_static
 from raster_pipeline.contracts import GridSpec
 
 
+@pytest.mark.parametrize('crs,origin,pixel',[('EPSG:5070',(0,20),1),('EPSG:4326',(-120,42),.1)])
+def test_canopy_aggregation_matches_individual_exact_pixel_intersections(tmp_path,crs,origin,pixel):
+    import shapely
+    from shapely.geometry import Polygon
+    from pyproj import Transformer
+    x,y=origin;t=from_origin(x,y,pixel,pixel)
+    values=(np.arange(400).reshape(20,20)%101).astype('uint8');values[::4,::3]=255
+    path=tmp_path/'exact.tif'
+    with rasterio.open(path,'w',driver='GTiff',width=20,height=20,count=1,dtype='uint8',crs=crs,transform=t,nodata=255) as dst:dst.write(values,1)
+    points=[(x+.2*pixel,y-.1*pixel),(x+19.8*pixel,y-5.3*pixel),(x+15.2*pixel,y-19.9*pixel),(x+.2*pixel,y-15.4*pixel)]
+    land=Polygon(points).difference(box(x+4.2*pixel,y-11.8*pixel,x+7.7*pixel,y-5.5*pixel))
+    project=Transformer.from_crs(crs,6933,always_xy=True) if crs=='EPSG:4326' else None
+    def area(g):return shapely.transform(g,project.transform,interleaved=False).area if project else g.area
+    weighted=valid=0
+    for r in range(20):
+        for c in range(20):
+            if values[r,c]==255:continue
+            overlap=box(x+c*pixel,y-(r+1)*pixel,x+(c+1)*pixel,y-r*pixel).intersection(land)
+            a=area(overlap);weighted+=a*values[r,c];valid+=a
+    mean,fraction=aggregate_canopy(path,[land],chunk_size=7)
+    assert mean[0]==pytest.approx(weighted/valid/100,rel=1e-6)
+    assert fraction[0]==pytest.approx(valid/area(land),rel=1e-6)
+
+
+def test_land_clipping_preserves_coast_lakes_islands_and_empty_cells():
+    from raster_pipeline.static import clip_land_cells
+    land=box(0,0,4,4).difference(box(1,1,2,2)).union(box(5,0,6,1))
+    target=[box(.1,.1,.5,.5),box(-1,-1,0,0),box(-1,2,1,3),
+        box(1,1,2,2),box(.5,.5,2.5,2.5),box(5,0,6,1),box(7,0,8,1)]
+    result=clip_land_cells(target,land)
+    assert all(a.equals(b.intersection(land)) for a,b in zip(result,target))
+
+
 def test_area_weighted_canopy_zero_special_and_coast(tmp_path):
     # Projected equal-area pixels: two 100m² valid pieces and one special code.
     path=tmp_path/'canopy.tif'
@@ -17,6 +50,24 @@ def test_area_weighted_canopy_zero_special_and_coast(tmp_path):
     mean,fraction=aggregate_canopy(path,[box(0,0,20,10),box(0,0,30,10),box(0,0,5,10)],chunk_size=1)
     np.testing.assert_allclose(mean[:2],[.5,.5]); assert mean[2]==0
     np.testing.assert_allclose(fraction,[1,2/3,1])
+
+
+def test_canopy_boundary_fast_path_preserves_subpixel_lake_hole(tmp_path):
+    path=tmp_path/'canopy-hole.tif'
+    with rasterio.open(path,'w',driver='GTiff',height=2,width=2,count=1,dtype='uint8',
+            crs='EPSG:5070',transform=from_origin(0,2,1,1),nodata=255) as dst:
+        dst.write(np.array([[[0,100],[50,255]]],dtype='uint8'))
+    land=box(0,0,2,2).difference(box(.25,1.25,.75,1.75))
+    mean,fraction=aggregate_canopy(path,[land],chunk_size=2)
+    assert mean[0]==pytest.approx(150/2.75/100)
+    assert fraction[0]==pytest.approx(2.75/3.75)
+    parallel=aggregate_canopy(path,[land,box(0,0,1,1)],chunk_size=2,workers=2)
+    serial=aggregate_canopy(path,[land,box(0,0,1,1)],chunk_size=2)
+    for a,b in zip(parallel,serial):np.testing.assert_array_equal(a,b)
+    from shapely.geometry import GeometryCollection
+    mixed=GeometryCollection([land,LineString([(0,0),(3,3)])])
+    for a,b in zip(aggregate_canopy(path,[mixed],chunk_size=2),(mean,fraction)):
+        np.testing.assert_array_equal(a,b)
 
 
 def test_clipped_lengths_dedup_status_and_unknown_inventory():

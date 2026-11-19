@@ -34,6 +34,32 @@ resource "google_service_account" "worker" {
   account_id   = "raster-batch-worker"
   display_name = "Weather raster batch worker"
 }
+resource "google_storage_bucket" "map_assets" {
+  count                       = var.map_bucket_name == null ? 0 : 1
+  name                        = var.map_bucket_name
+  location                    = var.region
+  uniform_bucket_level_access = true
+  force_destroy               = false
+  versioning { enabled = false }
+  cors {
+    origin          = ["*"]
+    method          = ["GET", "HEAD"]
+    response_header = ["Content-Type", "Cache-Control", "ETag"]
+    max_age_seconds = 3600
+  }
+}
+resource "google_storage_bucket_iam_member" "map_viewers" {
+  count  = var.map_bucket_name == null ? 0 : 1
+  bucket = google_storage_bucket.map_assets[0].name
+  role   = "roles/storage.objectViewer"
+  member = "allUsers"
+}
+resource "google_storage_bucket_iam_member" "map_writer" {
+  count  = var.map_bucket_name == null ? 0 : 1
+  bucket = google_storage_bucket.map_assets[0].name
+  role   = "roles/storage.objectUser"
+  member = "serviceAccount:${google_service_account.worker.email}"
+}
 resource "google_service_account" "scheduler" {
   account_id = "raster-batch-scheduler"
 }
@@ -56,7 +82,7 @@ resource "google_cloud_run_v2_job" "batch" {
       containers {
         image   = var.image
         command = ["python", "-m", "raster_pipeline.cloud_job"]
-        args    = ["--config-uri", var.config_uri, "--native-grid-uri", var.native_grid_uri, "--bucket", google_storage_bucket.rasters.name]
+        args    = concat(["--config-uri", var.config_uri, "--native-grid-uri", var.native_grid_uri, "--bucket", google_storage_bucket.rasters.name], var.map_bucket_name == null ? [] : ["--map-bucket", var.map_bucket_name])
         resources {
           limits = { cpu = "4", memory = "8Gi" }
         }
@@ -77,7 +103,8 @@ resource "google_cloud_run_v2_job_iam_member" "invoke" {
 }
 resource "google_cloud_scheduler_job" "poll" {
   name      = "poll-hourly-weather"
-  schedule  = "*/30 * * * *"
+  # ICON issues four model runs daily. Allow time for the hourly files to arrive.
+  schedule  = "0 3,9,15,21 * * *"
   time_zone = "Etc/UTC"
   region    = var.region
   http_target {

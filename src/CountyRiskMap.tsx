@@ -11,10 +11,11 @@
  */
 import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
-import type { Feature, FeatureCollection, GeoJsonProperties, Geometry, Point } from "geojson";
+import type { FeatureCollection, GeoJsonProperties, Geometry, Point } from "geojson";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { CountyForecast } from "./types";
 import { buildDemoForecast, fetchForecast } from "./api";
+import { fetchMapMetadata, installCanopy, installWeather, showMapLayer, type CanopyMap, type WeatherMap } from "./mapRasters";
 
 const COUNTIES: Record<string, { name: string; lat: number; lon: number }> = {
   "06037": { name: "Los Angeles",    lat: 34.052,  lon: -118.244 },
@@ -112,6 +113,11 @@ export default function CountyRiskMap({
   const [showCecLayer,     setShowCecLayer]     = useState(false);
   const [showCanopyLayer,  setShowCanopyLayer]  = useState(false);
   const [showWeatherLayer, setShowWeatherLayer] = useState(false);
+  const [canopyMap, setCanopyMap] = useState<CanopyMap | null>(null);
+  const [weatherMap, setWeatherMap] = useState<WeatherMap | null>(null);
+  const [weatherRefreshFailed, setWeatherRefreshFailed] = useState(false);
+  const rasterVisibility = useRef({ canopy: showCanopyLayer, weather: showWeatherLayer });
+  rasterVisibility.current = { canopy: showCanopyLayer, weather: showWeatherLayer };
   const accessToken   = (import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined) ?? "";
   latest.current      = { activeFips, activeWindow, onSelectFips, forecasts };
 
@@ -151,7 +157,35 @@ export default function CountyRiskMap({
     map.addControl(new mapboxgl.AttributionControl({ compact: true }),     "bottom-right");
     mapRef.current = map;
 
+    let disposed = false;
+    let rasterTimer: ReturnType<typeof setInterval> | undefined;
     map.once("load", () => {
+      let canopyVersion = "";
+      let weatherVersion = "";
+      const refreshRasters = async () => {
+        await Promise.allSettled([
+          fetchMapMetadata<CanopyMap>("canopy/latest.json", "canopy-map/v1").then((data) => {
+            if (disposed) return;
+            const version = `${data.tiles}:${data.minzoom}:${data.maxzoom}`;
+            if (version !== canopyVersion) {
+              installCanopy(map, data, rasterVisibility.current.canopy);
+              canopyVersion = version;
+            }
+            setCanopyMap(data);
+          }),
+          fetchMapMetadata<WeatherMap>("weather/latest.json", "weather-map/v1").then((data) => {
+            if (disposed) return;
+            if (data.batch_id !== weatherVersion) {
+              installWeather(map, data, latest.current.activeWindow, rasterVisibility.current.weather);
+              weatherVersion = data.batch_id;
+            }
+            setWeatherMap(data);
+            setWeatherRefreshFailed(false);
+          }).catch(() => { if (!disposed) setWeatherRefreshFailed(true); }),
+        ]);
+      };
+      void refreshRasters();
+      rasterTimer = setInterval(() => { void refreshRasters(); }, 5 * 60_000);
       const cur = latest.current;
       const pts = pointsGeoJSON(cur.forecasts, cur.activeFips, cur.activeWindow);
 
@@ -182,66 +216,21 @@ export default function CountyRiskMap({
             },
           }, "county-risk-heat");
 
-          // ── canopy-fill layer (visibility: none until toggled) ───────────
-          map.addLayer({
-            id:     "canopy-fill",
-            type:   "fill",
-            source: "county-boundaries",
-            layout: { visibility: "none" },
-            paint:  {
-              "fill-color": [
-                "interpolate", ["linear"], ["coalesce", ["get", "canopy"], 0],
-                0,   "rgba(255,255,255,0)",
-                50,  "rgba(100,180,80,0.5)",
-                100, "rgba(20,100,20,0.75)",
-              ],
-              "fill-outline-color": "rgba(0,0,0,0)",
-            },
-          }, "county-risk-heat"); // insert below the heatmap layer
-
-          // ── weather-risk-fill layer (visibility: none until toggled) ────
-          map.addLayer({
-            id:     "weather-risk-fill",
-            type:   "fill",
-            source: "county-boundaries",
-            layout: { visibility: "none" },
-            paint:  {
-              "fill-color": [
-                "interpolate", ["linear"], ["coalesce", ["get", "weather_risk"], 0],
-                0,    "rgba(0,20,220,0.5)",
-                0.25, "rgba(0,180,200,0.6)",
-                0.5,  "rgba(230,230,0,0.65)",
-                0.75, "rgba(255,140,0,0.7)",
-                1,    "rgba(220,30,30,0.75)",
-              ],
-              "fill-outline-color": "rgba(0,0,0,0)",
-            },
-          }, "county-risk-heat"); // insert below the heatmap layer
-
-          // Fetch EAGLE-I, canopy and weather risk in parallel, join all into source.
-          Promise.all([
-            fetch("/data/eaglei_impact.json")
-              .then((r) => r.json() as Promise<{ counties: Record<string, number> }>)
-              .catch((err) => { console.warn("eaglei_impact.json fetch failed:", err); return null; }),
-            fetch("/data/canopy_by_county.json")
-              .then((r) => r.json() as Promise<{ counties: Record<string, number> }>)
-              .catch((err) => { console.warn("canopy_by_county.json fetch failed:", err); return null; }),
-            fetch("/data/weather_risk_by_county.json")
-              .then((r) => r.json() as Promise<{ counties: Record<string, number> }>)
-              .catch((err) => { console.warn("weather_risk_by_county.json fetch failed:", err); return null; }),
-          ]).then(([eagleiData, canopyData, weatherData]) => {
-            const joined: FeatureCollection<Geometry, GeoJsonProperties> = {
-              ...boundaryFC,
-              features: boundaryFC.features.map((f: Feature<Geometry, GeoJsonProperties>) => {
-                const geoid        = f.properties?.["GEOID"] as string | undefined;
-                const impact       = geoid !== undefined ? (eagleiData?.counties[geoid] ?? null) : null;
-                const canopy       = geoid !== undefined ? (canopyData?.counties[geoid] ?? null) : null;
-                const weather_risk = geoid !== undefined ? (weatherData?.counties[geoid] ?? null) : null;
-                return { ...f, properties: { ...f.properties, impact, canopy, weather_risk } };
-              }),
-            };
-            (map.getSource("county-boundaries") as mapboxgl.GeoJSONSource).setData(joined);
-          });
+          // Historical impact remains county-level; canopy/weather use rasters.
+          fetch("/data/eaglei_impact.json")
+            .then((r) => r.json() as Promise<{ counties: Record<string, number> }>)
+            .then((data) => {
+              if (disposed) return;
+              const joined = {
+                ...boundaryFC,
+                features: boundaryFC.features.map((f) => ({
+                  ...f,
+                  properties: { ...f.properties, impact: data.counties[f.properties?.GEOID as string] ?? null },
+                })),
+              };
+              (map.getSource("county-boundaries") as mapboxgl.GeoJSONSource).setData(joined);
+            })
+            .catch((err) => console.warn("Historical impact data unavailable", err));
         })
         .catch((err) => console.warn("county-boundaries.geojson fetch failed:", err));
 
@@ -367,7 +356,11 @@ export default function CountyRiskMap({
       });
     });
 
-    return () => { map.remove(); mapRef.current = null; };
+    return () => {
+      disposed = true;
+      if (rasterTimer) clearInterval(rasterTimer);
+      map.remove(); mapRef.current = null;
+    };
   }, [accessToken]);
 
   // ── Sync data when forecasts / window / selection change ─────────────────
@@ -375,6 +368,13 @@ export default function CountyRiskMap({
     const src = mapRef.current?.getSource(SOURCE) as mapboxgl.GeoJSONSource | undefined;
     src?.setData(pointsGeoJSON(forecasts, activeFips, activeWindow));
   }, [forecasts, activeFips, activeWindow]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (map && weatherMap && map.getSource("weather-risk-raster")) {
+      installWeather(map, weatherMap, activeWindow, showWeatherLayer);
+    }
+  }, [activeWindow, weatherMap, showWeatherLayer]);
 
   // ── Fly to selected county ────────────────────────────────────────────────
   useEffect(() => {
@@ -478,30 +478,28 @@ export default function CountyRiskMap({
           <label className="layer-panel-row">
             <input
               type="checkbox"
+              disabled={!canopyMap}
               checked={showCanopyLayer}
               onChange={(e) => {
                 const on = e.target.checked;
                 setShowCanopyLayer(on);
-                mapRef.current?.setLayoutProperty(
-                  "canopy-fill", "visibility", on ? "visible" : "none",
-                );
+                showMapLayer(mapRef.current, "canopy-raster", on);
               }}
             />
-            Tree canopy (NLCD 2025)
+            Tree canopy (30 m raster){!canopyMap ? " · preparing" : ""}
           </label>
           <label className="layer-panel-row">
             <input
               type="checkbox"
+              disabled={!weatherMap}
               checked={showWeatherLayer}
               onChange={(e) => {
                 const on = e.target.checked;
                 setShowWeatherLayer(on);
-                mapRef.current?.setLayoutProperty(
-                  "weather-risk-fill", "visibility", on ? "visible" : "none",
-                );
+                showMapLayer(mapRef.current, "weather-risk-raster", on);
               }}
             />
-            DWD weather risk (heuristic)
+            DWD weather risk (live raster){!weatherMap ? " · awaiting first batch" : ""}
           </label>
           <p className="layer-panel-disclaimer">
             These layers show contributing factors, not outage probabilities.
@@ -558,8 +556,9 @@ export default function CountyRiskMap({
               <span className="risk-legend-swatch" style={{ background: "rgba(20,100,20,0.75)" }} />
               100%
             </span>
-            <span className="risk-legend-note">
-              Tree canopy cover — NLCD 2025 v2025-6 (static)
+            <span className="risk-legend-note raster-data-status">
+              Tree canopy cover — {canopyMap?.vintage ?? "NLCD 2025 v2025-6"} · 30 m source; averaged at wider zooms
+              {canopyMap && canopyMap.maxzoom < 12 && " · Native-detail tiles preparing"}
             </span>
           </div>
         )}
@@ -582,8 +581,13 @@ export default function CountyRiskMap({
               <span className="risk-legend-swatch" style={{ background: "rgba(220,30,30,0.75)" }} />
               Severe
             </span>
-            <span className="risk-legend-note">
-              DWD weather risk score — heuristic, uncalibrated, not an outage probability
+            <span className="risk-legend-note raster-data-status">
+              DWD environmental score · maximum per pixel for this window · roughly {Math.round((weatherMap?.grid_resolution_degrees ?? .125) * 111)} km weather grid
+              {weatherMap && <> · Issued {new Date(weatherMap.selected_run).toLocaleString()} · Valid {new Date(weatherMap.windows[activeWindow].start).toLocaleString()}–{new Date(weatherMap.windows[activeWindow].end).toLocaleString()}</>}
+              {weatherMap && Date.now() - Date.parse(weatherMap.selected_run) > 12 * 3600_000 && " · STALE FORECAST"}
+              {weatherRefreshFailed && " · Refresh unavailable; showing last loaded batch"}
+              {!!weatherMap?.coverage_summary?.missing_environment_cells && " · Cells with incomplete environmental data are transparent"}
+              {" · Uncalibrated; not an outage probability"}
             </span>
           </div>
         )}

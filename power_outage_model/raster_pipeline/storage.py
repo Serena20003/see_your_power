@@ -1,6 +1,7 @@
 """Immutable objects and compare-and-swap publication pointers."""
 from contextlib import contextmanager
 import hashlib
+import mimetypes
 import os
 from pathlib import Path,PurePosixPath
 import tempfile
@@ -82,11 +83,18 @@ class LocalStore:
 
 
 class GCSStore:
-    def __init__(self,bucket,client=None):
+    def __init__(self,bucket,client=None,cache_control=None):
         if client is None:
             from google.cloud import storage
             client=storage.Client()
         self.bucket=client.bucket(bucket)
+        self.cache_control=cache_control
+
+    def _upload_blob(self,key):
+        blob=self.bucket.blob(key)
+        if key.endswith('/latest.json'):blob.cache_control='no-store'
+        elif self.cache_control:blob.cache_control=self.cache_control
+        return blob
 
     def read(self,key):
         from google.api_core.exceptions import NotFound,PreconditionFailed
@@ -104,7 +112,7 @@ class GCSStore:
     def put(self,key,data):
         from google.api_core.exceptions import PreconditionFailed
         check_key(key)
-        try:self.bucket.blob(key).upload_from_string(data,if_generation_match=0,checksum='crc32c')
+        try:self._upload_blob(key).upload_from_string(data,if_generation_match=0,checksum='crc32c',content_type=mimetypes.guess_type(key)[0] or 'application/octet-stream')
         except PreconditionFailed:
             old,_=self.read(key)
             if old!=data:raise ValueError(f'immutable object mismatch: {key}')
@@ -113,7 +121,7 @@ class GCSStore:
         from google.api_core.exceptions import PreconditionFailed
         check_key(key)
         try:
-            self.bucket.blob(key).upload_from_string(data,if_generation_match=int(expected_generation or 0),checksum='crc32c')
+            self._upload_blob(key).upload_from_string(data,if_generation_match=int(expected_generation or 0),checksum='crc32c',content_type=mimetypes.guess_type(key)[0] or 'application/octet-stream')
             return True
         except PreconditionFailed:return False
 

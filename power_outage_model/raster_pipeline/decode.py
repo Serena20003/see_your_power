@@ -39,7 +39,8 @@ def inspect_grib(path):
             if field in ('U_10M','V_10M'):
                 vector=wind_reference({k:get(k) for k in ('uvRelativeToGrid','centre','paramId','gridType','uuidOfHGrid')})
             md={k:get(k) for k in ['gridType','uuidOfHGrid','md5GridSection','numberOfDataPoints',
-                'Ni','Nj','iScansNegatively','jScansPositively','packingType','shortName','paramId','name']}
+                'Ni','Nj','iScansNegatively','jScansPositively','packingType','shortName','paramId','name',
+                'packingError','binaryScaleFactor','decimalScaleFactor','bitsPerValue']}
             run=datetime.strptime(f"{get('dataDate'):08d}{get('dataTime'):04d}",'%Y%m%d%H%M').replace(tzinfo=timezone.utc)
             result={'field':field,'run':run,'start_step':start_step,'end_step':end_step,
                 'units':get('units'),'level':get('level'),'level_type':get('typeOfLevel'),
