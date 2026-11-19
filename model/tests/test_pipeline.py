@@ -254,7 +254,9 @@ class TestBatchInference:
 
 class TestAPIContracts:
     @pytest.fixture
-    def client(self):
+    def client(self, monkeypatch):
+        # These contracts exercise the explicitly disabled legacy fixture path.
+        monkeypatch.setenv('EXPERIMENTAL_IMPACT_ENABLED', 'false')
         from fastapi.testclient import TestClient
         from service.main import app
         return TestClient(app)

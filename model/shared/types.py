@@ -26,6 +26,7 @@ class ForecastStatus(str, Enum):
     TRANSFER_ESTIMATE = "transfer_estimate"
     INSUFFICIENT_DATA = "insufficient_data"
     UNAVAILABLE = "unavailable"
+    EXPERIMENTAL = "experimental"
 
 
 class DataMode(str, Enum):
@@ -37,6 +38,7 @@ class DataMode(str, Enum):
     """
     SAMPLE = "sample"
     LIVE = "live"
+    EXPERIMENTAL = "experimental"
     UNAVAILABLE = "unavailable"
 
 
@@ -72,6 +74,7 @@ class ForecastWindow(BaseModel):
         default=None, ge=0.0, le=1.0,
         description="Calibrated probability of ≥1 new unplanned outage in this county during this window."
     )
+    estimated_customer_impact: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
 
     # Conditional duration (only populated when probability is not None)
     duration_low_hours: Optional[float] = Field(default=None, ge=0.0)
@@ -90,6 +93,20 @@ class ForecastWindow(BaseModel):
 # Full county forecast (all three windows)
 # ---------------------------------------------------------------------------
 
+class ExperimentalImpactMetadata(BaseModel):
+    model_id: str
+    anchor_date: str
+    history_year: int
+    supported: bool
+    supported_counties: int
+    calendar_extrapolation: bool
+    within_training_feature_ranges: bool
+    limitations: str
+    weather_used: bool = False
+    locations_simulated: bool = True
+    fixed_utc_days: bool = True
+
+
 class CountyForecast(BaseModel):
     """Full forecast payload for one county FIPS, served by GET /v1/forecasts/{fips}."""
 
@@ -105,13 +122,14 @@ class CountyForecast(BaseModel):
     )
 
     status: ForecastStatus
+    experimental_impact: Optional[ExperimentalImpactMetadata] = None
 
     # Provenance: sample fixtures are always "sample"; live pipeline output is "live";
     # unknown/unavailable counties are "unavailable".
     # Old JSON without this field defaults conservatively to "unavailable".
     data_mode: DataMode = Field(
         default=DataMode.UNAVAILABLE,
-        description="Data provenance: sample | live | unavailable."
+        description="Data provenance: sample | live | experimental | unavailable."
     )
 
     # The three windows.  Always present; probability=None when status != local_validated/transfer.

@@ -3,10 +3,9 @@ import type { ElectronicItem, HouseholdAction } from "./types/database";
 /**
  * API client for the Runway forecast service.
  *
- * - In live mode (`VITE_API_BASE_URL` set), calls the real FastAPI service.
- * - In offline / demo mode (default), generates a demo forecast in-browser
- *   using the heuristic engine so the UI always shows meaningful numbers.
- * - Every live call has a 5-second timeout and an offline fallback.
+ * - Calls the same-origin FastAPI service by default.
+ * - VITE_OFFLINE_MODE=true explicitly selects the old offline demonstration.
+ * - Failed live forecast calls never substitute demonstration estimates.
  * - PSPS/planned notices are served from a separate endpoint and never
  *   influence the unplanned-outage probability display.
  */
@@ -18,9 +17,10 @@ import type {
   PlannedOutagesResponse,
 } from "./types";
 
-// Base URL is empty string in offline mode.
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
-const LIVE = Boolean(import.meta.env.VITE_API_BASE_URL);
+// A configured "/" enables live same-origin requests (Vite proxies /v1 in dev).
+// Keep the configured value for mode selection; normalize only the URL prefix.
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
+const LIVE = import.meta.env.VITE_OFFLINE_MODE !== "true";
 const TIMEOUT_MS = 5_000;
 
 // How many milliseconds before a cached response is considered stale.
@@ -196,8 +196,11 @@ export async function fetchForecast(
   const now = Date.now();
   if (
     previousData &&
+    previousData.county_fips === fips &&
+    !previousData.is_stale &&
     previousFetchedAt &&
-    now - previousFetchedAt < STALE_AFTER_MS
+    now - previousFetchedAt < (previousData.experimental_impact ? 5 * 60_000 : STALE_AFTER_MS) &&
+    (!previousData.experimental_impact || now < Date.parse(previousData.next_24h.window_end))
   ) {
     // Still fresh — no refetch needed
     return { phase: "success", data: previousData, fetchedAt: previousFetchedAt };
@@ -220,7 +223,7 @@ export async function fetchForecast(
     return { phase: "success", data, fetchedAt: now };
   } catch (err) {
     // Fall back to previous data as stale if available
-    if (previousData && previousFetchedAt) {
+    if (previousData?.county_fips === fips && previousFetchedAt) {
       return { phase: "stale", data: previousData, fetchedAt: previousFetchedAt };
     }
     return {
@@ -355,6 +358,8 @@ export function formatForecastAge(issuedAt: string): string {
 /** Badge text for a ForecastStatus value */
 export function statusBadgeText(status: CountyForecast["status"]): string {
   switch (status) {
+    case "experimental":
+      return "Experimental estimate";
     case "local_validated":
       return "Validated";
     case "transfer_estimate":
@@ -365,6 +370,20 @@ export function statusBadgeText(status: CountyForecast["status"]): string {
       return "Unavailable";
   }
 }
+
+export interface ExperimentalImpactMap {
+  schema_version: "experimental-impact-web/v1";
+  model_id: string;
+  anchor_date: string;
+  published_at: string;
+  supported_counties: number;
+  counties: Record<string, { name: string; state: string; windows: {
+    start: string; end: string; estimated_customer_impact: number;
+    within_training_feature_ranges: boolean;
+  }[] }>;
+}
+
+export const fetchExperimentalImpact = () => fetchJson<ExperimentalImpactMap>(`${API_BASE}/v1/experimental-impact`);
 
 
 export interface HouseholdState {

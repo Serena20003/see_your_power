@@ -14,7 +14,7 @@ import mapboxgl from "mapbox-gl";
 import type { FeatureCollection, GeoJsonProperties, Geometry, Point } from "geojson";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { CountyForecast } from "./types";
-import { buildDemoForecast, fetchForecast } from "./api";
+import { fetchExperimentalImpact, fetchForecast, type ExperimentalImpactMap } from "./api";
 import { fetchMapMetadata, installCanopy, installWeather, showMapLayer, type CanopyMap, type WeatherMap } from "./mapRasters";
 
 const COUNTIES: Record<string, { name: string; lat: number; lon: number }> = {
@@ -63,6 +63,7 @@ function pointsGeoJSON(
     features: FIPS_LIST.map((fips) => {
       const county = COUNTIES[fips];
       const p      = forecasts[fips]?.[window]?.probability ?? null;
+      const impact = forecasts[fips]?.[window]?.estimated_customer_impact;
       return {
         type: "Feature",
         id: fips,
@@ -70,7 +71,7 @@ function pointsGeoJSON(
         properties: {
           fips,
           name:   county.name,
-          value:  p === null ? "—" : `${Math.round(p * 100)}%`,
+          value:  impact != null ? `≈${Math.round(impact).toLocaleString()}` : p === null ? "—" : `${Math.round(p * 100)}%`,
           color:  probColor(p),
           prob:   p ?? 0,
           prob2:  (p ?? 0) ** 2,     // squared weight: centres dominate, low-risk barely registers
@@ -103,10 +104,9 @@ export default function CountyRiskMap({
   const mapRef        = useRef<mapboxgl.Map | null>(null);
   const latest        = useRef({ activeFips, activeWindow, onSelectFips, forecasts: {} as Record<string, CountyForecast> });
   const previousFips  = useRef(activeFips);
-  // Seed with demo forecasts immediately so the heatmap has data on first render.
-  const [forecasts, setForecasts] = useState<Record<string, CountyForecast>>(
-    () => Object.fromEntries(FIPS_LIST.map((fips) => [fips, buildDemoForecast(fips)]))
-  );
+  const [forecasts, setForecasts] = useState<Record<string, CountyForecast>>({});
+  const [impactMap, setImpactMap] = useState<ExperimentalImpactMap | null>(null);
+  const [impactBoundaries, setImpactBoundaries] = useState<FeatureCollection<Geometry, GeoJsonProperties> | null>(null);
   const [layerPanelOpen,   setLayerPanelOpen]   = useState(true);
   const [showRiskLayer,    setShowRiskLayer]    = useState(true);
   const [showEagleiLayer,  setShowEagleiLayer]  = useState(false);
@@ -129,11 +129,21 @@ export default function CountyRiskMap({
         const result = await fetchForecast(fips);
         if (result.phase === "success" || result.phase === "stale") return [fips, result.data] as const;
       } catch { /* fall through */ }
-      return [fips, buildDemoForecast(fips)] as const;
+      return null;
     })).then((entries) => {
-      if (!cancelled) setForecasts(Object.fromEntries(entries));
+      if (!cancelled) setForecasts(Object.fromEntries(entries.filter((entry) => entry !== null)));
     });
     return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = () => fetchExperimentalImpact().then((data) => {
+      if (!cancelled && data.schema_version === "experimental-impact-web/v1") setImpactMap(data);
+    }).catch(() => {});
+    void refresh();
+    const timer = setInterval(refresh, 5 * 60_000);
+    return () => { cancelled = true; clearInterval(timer); };
   }, []);
 
   // Merge freshly-loaded active-county forecast.
@@ -195,8 +205,19 @@ export default function CountyRiskMap({
       fetch("/data/county-boundaries.geojson")
         .then((r) => r.json())
         .then((boundaryFC: FeatureCollection<Geometry, GeoJsonProperties>) => {
+          if (disposed) return;
           // Add source immediately with boundary data (data join follows).
           map.addSource("county-boundaries", { type: "geojson", data: boundaryFC });
+          map.addSource("experimental-impact-counties", { type: "geojson", data: boundaryFC });
+          map.addLayer({ id: "experimental-impact-fill", type: "fill", source: "experimental-impact-counties",
+            paint: {
+              "fill-color": ["interpolate", ["linear"], ["coalesce", ["get", "estimated_impact"], 0],
+                0, "#dbeafe", 10, "#00b4c8", 100, "#e6e600", 1000, "#ff8c00", 5000, "#dc1e1e"],
+              "fill-opacity": ["case", ["has", "estimated_impact"], 0.6, 0],
+              "fill-outline-color": "rgba(255,255,255,0.3)",
+            },
+          }, map.getStyle().layers?.find(layer => layer.type === "fill" && layer["source-layer"] === "water")?.id ?? "county-risk-heat");
+          setImpactBoundaries(boundaryFC);
 
           // ── eaglei-impact-fill layer (visibility: none until toggled) ────
           map.addLayer({
@@ -344,11 +365,11 @@ export default function CountyRiskMap({
       });
 
       // ── Click handler ─────────────────────────────────────────────────────
-      const CLICK_LAYERS = ["county-risk-dots", "county-risk-values", "county-risk-names"];
+      const CLICK_LAYERS = ["county-risk-dots", "county-risk-values", "county-risk-names", "experimental-impact-fill"];
       map.on("click", (event) => {
-        const hit  = map.queryRenderedFeatures(event.point, { layers: CLICK_LAYERS })[0];
-        const fips = hit?.properties?.fips as string | undefined;
-        if (fips && COUNTIES[fips]) latest.current.onSelectFips(fips);
+        const hit = map.queryRenderedFeatures(event.point, { layers: CLICK_LAYERS.filter(id => map.getLayer(id)) })[0];
+        const fips = (hit?.properties?.fips ?? hit?.properties?.GEOID) as string | undefined;
+        if (fips) latest.current.onSelectFips(fips);
       });
       CLICK_LAYERS.forEach((layer) => {
         map.on("mouseenter", layer, () => { map.getCanvas().style.cursor = "pointer"; });
@@ -368,6 +389,19 @@ export default function CountyRiskMap({
     const src = mapRef.current?.getSource(SOURCE) as mapboxgl.GeoJSONSource | undefined;
     src?.setData(pointsGeoJSON(forecasts, activeFips, activeWindow));
   }, [forecasts, activeFips, activeWindow]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !impactMap || !impactBoundaries) return;
+    const source = map.getSource("experimental-impact-counties") as mapboxgl.GeoJSONSource | undefined;
+    const index = activeWindow === "next_24h" ? 0 : activeWindow === "next_24_48h" ? 1 : 2;
+    source?.setData({ ...impactBoundaries, features: impactBoundaries.features.map((f) => {
+      const value = impactMap.counties[f.properties?.GEOID as string]?.windows[index]?.estimated_customer_impact;
+      return { ...f, properties: { ...f.properties, ...(value != null ? { estimated_impact: value } : {}) } };
+    }) });
+    showMapLayer(map, "experimental-impact-fill", showRiskLayer);
+    showMapLayer(map, "county-risk-heat", false);
+  }, [impactMap, impactBoundaries, activeWindow, showRiskLayer]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -402,8 +436,8 @@ export default function CountyRiskMap({
   return (
     <div className="risk-map-wrap">
       <div className="risk-map-header">
-        <span className="section-kicker">COUNTY RISK MAP · {windowLabel}</span>
-        <p>Outage probability heat map — warm zones indicate higher risk. Click any county to load its forecast.</p>
+        <span className="section-kicker">EXPERIMENTAL COUNTY IMPACT · {activeForecast?.[activeWindow].window_label ?? windowLabel}</span>
+        <p>Estimated customer impact · calendar and geography baseline. Click a county to view its estimate. Unmodeled counties are transparent.</p>
       </div>
       <div className="risk-map-canvas">
         {!accessToken && (
@@ -438,14 +472,15 @@ export default function CountyRiskMap({
                 const map = mapRef.current;
                 if (!map) return;
                 const v = on ? "visible" : "none";
-                map.setLayoutProperty("county-risk-heat",   "visibility", v);
+                map.setLayoutProperty("county-risk-heat",   "visibility", impactMap ? "none" : v);
+                showMapLayer(map, "experimental-impact-fill", on);
                 map.setLayoutProperty("county-risk-halo",   "visibility", v);
                 map.setLayoutProperty("county-risk-dots",   "visibility", v);
                 map.setLayoutProperty("county-risk-values", "visibility", v);
                 map.setLayoutProperty("county-risk-names",  "visibility", v);
               }}
             />
-            Outage risk heatmap
+            Experimental county impact
           </label>
           <label className="layer-panel-row">
             <input
@@ -527,19 +562,19 @@ export default function CountyRiskMap({
           </div>
         )}
         <div className="risk-map-legend">
-          <span className="section-kicker">RISK</span>
+          <span className="section-kicker">ESTIMATED IMPACT</span>
           {([
-            { label: "Low",    color: "rgba(0,180,200,0.80)"  },
-            { label: "Mod",    color: "rgba(230,230,0,0.85)"  },
-            { label: "High",   color: "rgba(255,140,0,0.88)"  },
-            { label: "Severe", color: "rgba(220,30,30,0.92)"  },
+            { label: "10",    color: "rgba(0,180,200,0.80)"  },
+            { label: "100",    color: "rgba(230,230,0,0.85)"  },
+            { label: "1,000",   color: "rgba(255,140,0,0.88)"  },
+            { label: "5,000+", color: "rgba(220,30,30,0.92)"  },
           ] as const).map(({ label, color }) => (
             <span key={label} className="risk-legend-item">
               <span className="risk-legend-swatch" style={{ background: color }} />
               {label}
             </span>
           ))}
-          <span className="risk-legend-note">Thermal heatmap · Click to select</span>
+          <span className="risk-legend-note">Customer-equivalent impact · not outage probability</span>
         </div>
         {showCanopyLayer && (
           <div className="risk-map-legend canopy-legend">

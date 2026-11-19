@@ -5,11 +5,16 @@ Routes:
   GET /v1/forecasts/{county_fips}          → CountyForecast
   GET /v1/planned-outages/{county_fips}    → PlannedOutagesResponse
   GET /v1/coverage                         → list[CountyCoverage]
+  GET /v1/experimental-impact              → all supported county impact estimates
   GET /v1/weather-score                    → WeatherScoreResponse
   GET /healthz                             → {"status": "ok"}
   GET /*                                   → React SPA (dist/index.html fallback)
 
 County forecasts:
+  - By default, serves the existing fitted experimental county-impact model
+    from a daily GCS export. This estimates typical allocated customer impact,
+    not outage probability; original probability/duration fields remain null.
+  - EXPERIMENTAL_IMPACT_ENABLED=false explicitly selects the legacy paths below.
   - In fixture mode (USE_FIXTURES=true, the default), reads saved fixture JSON and
     sanitises it: forces data_mode=sample, null probabilities/durations, and
     status=insufficient_data to prevent misleading claims.
@@ -545,6 +550,10 @@ def _get_forecast(fips: str) -> CountyForecast:
     if len(fips) != 5 or not fips.isdigit():
         raise HTTPException(status_code=422, detail="county_fips must be exactly 5 digits")
 
+    from service.experimental_impact import cache, enabled
+    if enabled():
+        return cache.forecast(fips)
+
     use_fixtures = os.getenv("USE_FIXTURES", "true").lower() == "true"
     if use_fixtures:
         fc = _load_fixture_forecast(fips)
@@ -1074,9 +1083,10 @@ def get_forecast(county_fips: str) -> CountyForecast:
     """
     County-level unplanned outage forecast for the next 72 hours in three windows.
 
-    In this release all responses carry data_mode=sample (fixture mode) or
-    data_mode=unavailable (live mode).  Numeric probability and duration are
-    always null; no calibrated model backend is yet wired.
+    By default, returns experimental estimated_customer_impact for supported
+    counties and unavailable for unsupported counties. Windows are fixed UTC
+    calendar days, not rolling 24-hour intervals. Probability and duration stay
+    null; the fitted impact baseline is not a calibrated onset model.
 
     - `status: insufficient_data` — release gates not met; probability = null.
     - `status: unavailable` — county not in coverage; no forecast.
@@ -1109,11 +1119,27 @@ def get_planned_outages(county_fips: str) -> PlannedOutagesResponse:
 @app.get("/v1/coverage", response_model=list[CountyCoverage])
 def get_coverage() -> list[CountyCoverage]:
     """County coverage metadata: which counties have local labels, transfer, or no data."""
+    from service.experimental_impact import cache, enabled
+    if enabled():
+        data = cache.get()
+        return [CountyCoverage(county_fips=fips, county_name=c['name'], state=c['state'],
+                    has_local_labels=False, label_years=[], transfer_source_states=[],
+                    gfs_coverage=False, nws_alerts_coverage=False, canopy_coverage=False, terrain_coverage=False,
+                    current_status='experimental' if c['windows'] else 'unavailable')
+                for fips, c in data['counties'].items()]
     path = FIXTURES_DIR / "coverage.json"
     if path.exists():
         with open(path) as f:
             return [CountyCoverage.model_validate(item) for item in json.load(f)]
     return []
+
+
+@app.get('/v1/experimental-impact')
+def get_experimental_impact():
+    from service.experimental_impact import cache, enabled
+    if not enabled():
+        raise HTTPException(404, 'Experimental model is disabled.')
+    return cache.get()
 
 
 @app.get("/v1/weather-score", response_model=WeatherScoreResponse)

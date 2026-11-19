@@ -442,9 +442,9 @@ export default function AppPage() {
         </main>
 
         <footer className="site-footer">
-          <span>Runway · Static product preview</span>
+          <span>Runway · Experimental model preview</span>
           <span>
-            County forecast data is sample output from an unvalidated model stub.
+            County impact estimates come from a fitted experimental model, with weather shown separately.
             No numeric outage probabilities are presented as validated predictions.
           </span>
         </footer>

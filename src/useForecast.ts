@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchForecast } from "./api";
 import type { ApiState, CountyForecast } from "./types";
 
-const POLL_INTERVAL_MS = 60 * 60 * 1_000; // re-fetch every hour
+const POLL_INTERVAL_MS = 5 * 60 * 1_000; // follow the daily publication cache
 
 export function useForecast(fips: string): {
   state: ApiState<CountyForecast>;

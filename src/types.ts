@@ -15,6 +15,7 @@ export type FireZone = "none" | "tier2" | "tier3";
 export type ForecastStatus =
   | "local_validated"
   | "transfer_estimate"
+  | "experimental"
   | "insufficient_data"
   | "unavailable";
 
@@ -30,6 +31,7 @@ export interface ForecastWindow {
   window_end: string;
   /** Calibrated probability 0–1, null when status is insufficient_data */
   probability: number | null;
+  estimated_customer_impact?: number | null;
   duration_low_hours: number | null;
   duration_high_hours: number | null;
   reasons: string[];
@@ -49,6 +51,19 @@ export interface CountyForecast {
   issued_at: string;            // ISO string
   source_timestamps: Record<string, string>;
   status: ForecastStatus;
+  experimental_impact?: {
+    model_id: string;
+    anchor_date: string;
+    history_year: number;
+    supported: boolean;
+    supported_counties: number;
+    calendar_extrapolation: boolean;
+    within_training_feature_ranges: boolean;
+    limitations: string;
+    weather_used: false;
+    locations_simulated: true;
+    fixed_utc_days: true;
+  } | null;
   next_24h: ForecastWindow;
   next_24_48h: ForecastWindow;
   next_48_72h: ForecastWindow;

@@ -29,13 +29,17 @@ jobs:
           cache: pip
           cache-dependency-path: model/requirements.web.txt
 
-      - name: Install web runtime dependencies
-        run: pip install --no-cache-dir -r model/requirements.web.txt
+      - name: Install model test dependencies
+        # The test suite includes inference/pipeline tests that import NumPy.
+        # The deployed image still uses only requirements.web.txt.
+        run: pip install --no-cache-dir -r model/requirements.txt
 
       - name: Install test dependencies
         run: pip install --no-cache-dir pytest==8.3.4 pytest-asyncio==0.24.0
 
       - name: Run model tests
+        env:
+          PYTHONPATH: model
         run: python -m pytest model/tests -q
 
   # ── Build and deploy on push to main only ────────────────────────────────

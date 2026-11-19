@@ -1,0 +1,37 @@
+name: Publish experimental county impact
+
+on:
+  schedule:
+    # The existing model uses fixed UTC calendar days, not weather inputs.
+    - cron: '5 0 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-experimental-impact.yml'
+      - 'power_outage_model/scripts/publish_experimental_impact.py'
+      - 'power_outage_model/artifacts/experimental-point-model-4e97b613.zip'
+      - 'power_outage_model/outage_model/experimental/**'
+
+permissions:
+  contents: read
+concurrency:
+  group: publish-experimental-impact
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned inference dependencies
+        run: pip install -r power_outage_model/requirements-model.lock -r power_outage_model/requirements-experimental.txt
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - name: Publish fitted model estimates
+        run: python power_outage_model/scripts/publish_experimental_impact.py --bucket runway-515115-map-tiles

@@ -46,7 +46,8 @@ function WindowTabs({ forecast, activeKey, onSelect }: WindowTabsProps) {
       {WINDOW_KEYS.map((key) => {
         const w: ForecastWindow = forecast[key];
         const prob = w.probability;
-        const pct = prob !== null ? `${Math.round(prob * 100)}%` : "—";
+        const impact = w.estimated_customer_impact;
+        const pct = impact != null ? Math.round(impact).toLocaleString() : prob !== null ? `${Math.round(prob * 100)}%` : "—";
         return (
           <button
             key={key}
@@ -59,7 +60,7 @@ function WindowTabs({ forecast, activeKey, onSelect }: WindowTabsProps) {
             <span>{w.window_label}</span>
             <strong>{pct}</strong>
             <span>
-              {prob !== null
+              {impact != null ? "estimated impact" : prob !== null
                 ? `${pct} est. chance`
                 : forecast.status === "insufficient_data"
                 ? "Awaiting validated data"
@@ -78,6 +79,7 @@ function WindowTabs({ forecast, activeKey, onSelect }: WindowTabsProps) {
 
 function StatusBadge({ status }: { status: CountyForecast["status"] }) {
   const type: Record<CountyForecast["status"], "blue" | "teal" | "warm-gray" | "gray"> = {
+    experimental: "warm-gray",
     local_validated: "teal",
     transfer_estimate: "blue",
     insufficient_data: "warm-gray",
@@ -103,6 +105,8 @@ interface ForecastCardProps {
 function ForecastCard({ forecast, windowKey, isStale }: ForecastCardProps) {
   const w: ForecastWindow = forecast[windowKey];
   const prob = w.probability;
+  const impact = w.estimated_customer_impact;
+  const experimental = forecast.experimental_impact;
   const probPct = formatProbability(prob);
   const age = formatForecastAge(forecast.issued_at);
 
@@ -123,7 +127,14 @@ function ForecastCard({ forecast, windowKey, isStale }: ForecastCardProps) {
       </div>
 
       {/* Probability display */}
-      {prob !== null ? (
+      {impact != null ? (
+        <>
+          <h2 id="forecast-card-title" className="forecast-prob">≈{Math.round(impact).toLocaleString()}</h2>
+          <p className="forecast-prob-label">estimated county customer impact · experimental</p>
+          <p>{new Date(w.window_start).toLocaleDateString(undefined, { timeZone: "UTC" })} · 00:00–24:00 UTC</p>
+          <p>Calendar and geography baseline trained on {experimental?.history_year} records. Live weather is shown separately.</p>
+        </>
+      ) : prob !== null ? (
         <>
           <h2 id="forecast-card-title" className="forecast-prob">{probPct}</h2>
           <p className="forecast-prob-label">estimated chance of a new unplanned outage in this county</p>
@@ -132,7 +143,9 @@ function ForecastCard({ forecast, windowKey, isStale }: ForecastCardProps) {
         <>
           <h2 id="forecast-card-title" className="forecast-no-data">—</h2>
           <p className="forecast-no-data-label">
-            {forecast.status === "insufficient_data"
+            {experimental && !experimental.supported
+              ? "This county is outside the existing model's supported coverage. No estimate is substituted."
+              : forecast.status === "insufficient_data"
               ? "Numeric forecast not yet available — release checks not yet passed for this county."
               : forecast.status === "transfer_estimate"
               ? "Transfer estimate — no local labels available."
@@ -202,7 +215,7 @@ function ForecastCard({ forecast, windowKey, isStale }: ForecastCardProps) {
       {/* Freshness */}
       <div className="forecast-meta">
         <span>
-          Forecast issued {age}
+          {experimental ? "Model estimate generated" : "Forecast issued"} {age}
           {isStale && <> · <span className="forecast-stale">Stale — last complete batch</span></>}
         </span>
         <span>Model v{forecast.model_version}</span>
@@ -210,9 +223,9 @@ function ForecastCard({ forecast, windowKey, isStale }: ForecastCardProps) {
 
       {/* County-level disclaimer (always shown) */}
       <p className="forecast-disclaimer">
-        County-level estimate. This is the chance of at least one new unplanned outage
+        {experimental ? experimental.limitations : <>County-level estimate. This is the chance of at least one new unplanned outage
         anywhere in this county, not the chance that your home loses power.
-        Planned outages and PSPS are shown separately below.
+        Planned outages and PSPS are shown separately below.</>}
       </p>
     </Tile>
   );
@@ -305,8 +318,8 @@ export default function ForecastPanel({ fips, onFipsChange, flyToCoords, mapOver
               <span className="section-kicker">COUNTY FORECAST</span>
               <h1 id="forecast-title">Your power forecast</h1>
               <p>
-                Estimated chance of a new unplanned outage anywhere in the
-                selected county, for each 24-hour window.
+                Experimental county customer impact across three UTC days.
+                Live weather and canopy are separate contributing-factor layers.
               </p>
             </div>
           </div>
