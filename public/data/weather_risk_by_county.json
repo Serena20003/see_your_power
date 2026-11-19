@@ -1,0 +1,11 @@
+{
+  "counties": {
+    "06037": 0.5249999165534973,
+    "06083": 0.5249999165534973
+  },
+  "batch_id": "bca954e59e6da96a059e0fd28b905a44",
+  "cutoff": "2026-11-16T06:00:00+00:00",
+  "fixture": true,
+  "calibrated": false,
+  "heuristic_score": true
+}
