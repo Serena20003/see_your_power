@@ -106,6 +106,7 @@ export default function CountyRiskMap({
   const [forecasts, setForecasts] = useState<Record<string, CountyForecast>>(
     () => Object.fromEntries(FIPS_LIST.map((fips) => [fips, buildDemoForecast(fips)]))
   );
+  const [layerPanelOpen,   setLayerPanelOpen]   = useState(true);
   const [showRiskLayer,    setShowRiskLayer]    = useState(true);
   const [showEagleiLayer,  setShowEagleiLayer]  = useState(false);
   const [showCecLayer,     setShowCecLayer]     = useState(false);
@@ -414,8 +415,19 @@ export default function CountyRiskMap({
         {mapOverlay && (
           <div className="risk-map-overlay">{mapOverlay}</div>
         )}
-        <div className="map-layer-panel">
-          <span className="section-kicker">MAP LAYERS</span>
+        <div className={`map-layer-panel${layerPanelOpen ? "" : " map-layer-panel--collapsed"}`}>
+          <button
+            type="button"
+            className="layer-panel-header"
+            onClick={() => setLayerPanelOpen((v) => !v)}
+            aria-expanded={layerPanelOpen}
+          >
+            <span className="section-kicker">MAP LAYERS</span>
+            <span className="layer-panel-chevron" aria-hidden="true">
+              {layerPanelOpen ? "▾" : "▸"}
+            </span>
+          </button>
+          <div className="layer-panel-body">
           <label className="layer-panel-row">
             <input
               type="checkbox"
@@ -494,6 +506,7 @@ export default function CountyRiskMap({
           <p className="layer-panel-disclaimer">
             These layers show contributing factors, not outage probabilities.
           </p>
+          </div>
         </div>
         {showEagleiLayer && (
           <div className="risk-map-legend eaglei-legend">
