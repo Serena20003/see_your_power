@@ -1,0 +1,170 @@
+name: Deploy web app
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    # Manual trigger restricted to main via branch protection; no extra filter needed.
+
+# Cancel in-progress runs for the same ref so a fast-follow push does not
+# deploy an older commit on top of a newer one.
+concurrency:
+  group: deploy-web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Run tests on every push and pull request ──────────────────────────────
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a  # v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@90485b7ad25ff6932f80015b8a56a6546cd816a7  # v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: model/requirements.web.txt
+
+      - name: Install web runtime dependencies
+        run: pip install --no-cache-dir -r model/requirements.web.txt
+
+      - name: Install test dependencies
+        run: pip install --no-cache-dir pytest==8.3.4 pytest-asyncio==0.24.0
+
+      - name: Run model tests
+        run: python -m pytest model/tests -q
+
+  # ── Build and deploy on push to main only ────────────────────────────────
+  deploy:
+    name: Deploy
+    needs: test
+    runs-on: ubuntu-latest
+    # Only deploy on direct pushes to main (not PRs, even if they target main)
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    permissions:
+      contents: read
+      id-token: write   # Required for Workload Identity Federation
+
+    env:
+      PROJECT: runway-515115
+      REGION: us-central1
+      SERVICE: runway-web
+      IMAGE_BASE: us-central1-docker.pkg.dev/runway-515115/runway-web/app
+      RUNTIME_SA: runway-web-runtime@runway-515115.iam.gserviceaccount.com
+
+    steps:
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a  # v4
+
+      # Authenticate via Workload Identity Federation — no stored key
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@12060449e87204eca501a11f2f7f1483024afff0  # v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      # Derive a short SHA once; use it everywhere in this job
+      - name: Set short SHA
+        id: sha
+        run: echo "short=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
+      # Build image remotely via Cloud Build, passing VITE_* as build args
+      - name: Build image with Cloud Build
+        run: |
+          gcloud builds submit . \
+            --project="${PROJECT}" \
+            --config=cloudbuild.web.yaml \
+            --substitutions=\
+          "SHORT_SHA=${{ steps.sha.outputs.short }},\
+          _VITE_MAPBOX_ACCESS_TOKEN=${{ vars.VITE_MAPBOX_ACCESS_TOKEN }},\
+          _VITE_SUPABASE_URL=${{ vars.VITE_SUPABASE_URL }},\
+          _VITE_SUPABASE_ANON_KEY=${{ vars.VITE_SUPABASE_ANON_KEY }}"
+
+      # Resolve immutable digest so we deploy exactly what was built
+      - name: Resolve image digest
+        id: image
+        run: |
+          SHORT="${{ steps.sha.outputs.short }}"
+          DIGEST=$(gcloud artifacts docker images describe \
+            "${IMAGE_BASE}:${SHORT}" \
+            --project="${PROJECT}" \
+            --format="value(image_summary.digest)")
+          echo "ref=${IMAGE_BASE}@${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+
+      # Deploy candidate revision with 0% traffic
+      - name: Deploy candidate revision
+        run: |
+          SHORT="${{ steps.sha.outputs.short }}"
+          gcloud run deploy "${SERVICE}" \
+            --project="${PROJECT}" \
+            --region="${REGION}" \
+            --image="${{ steps.image.outputs.ref }}" \
+            --service-account="${RUNTIME_SA}" \
+            --set-env-vars="WEATHER_CACHE_BUCKET=runway-weather,USE_FIXTURES=false" \
+            --port=8080 \
+            --cpu=1 \
+            --memory=512Mi \
+            --min-instances=0 \
+            --max-instances=1 \
+            --revision-suffix="${SHORT}" \
+            --no-traffic \
+            --allow-unauthenticated
+
+      # Smoke-test the candidate before shifting traffic
+      - name: Smoke-test candidate
+        run: |
+          SHORT="${{ steps.sha.outputs.short }}"
+          REVISION="${SERVICE}-${SHORT}"
+          # Cloud Run assigns a URL to the service; test via the service URL
+          # (candidate gets traffic only after promotion, but /healthz is fast)
+          SERVICE_URL=$(gcloud run services describe "${SERVICE}" \
+            --project="${PROJECT}" \
+            --region="${REGION}" \
+            --format="value(status.url)")
+
+          HTTP_STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
+            --max-time 30 "${SERVICE_URL}/healthz" || echo "000")
+
+          if [[ "$HTTP_STATUS" != "200" ]]; then
+            echo "Smoke test failed (HTTP ${HTTP_STATUS}). Production traffic unchanged."
+            exit 1
+          fi
+          echo "healthz → ${HTTP_STATUS} ✓"
+
+      # Promote candidate to 100% only after smoke test passes
+      - name: Promote to 100% traffic
+        run: |
+          SHORT="${{ steps.sha.outputs.short }}"
+          REVISION="${SERVICE}-${SHORT}"
+          gcloud run services update-traffic "${SERVICE}" \
+            --project="${PROJECT}" \
+            --region="${REGION}" \
+            --to-revisions="${REVISION}=100"
+
+      # Print deployment summary to the Actions run page
+      - name: Summary
+        run: |
+          SHORT="${{ steps.sha.outputs.short }}"
+          REVISION="${SERVICE}-${SHORT}"
+          SERVICE_URL=$(gcloud run services describe "${SERVICE}" \
+            --project="${PROJECT}" \
+            --region="${REGION}" \
+            --format="value(status.url)")
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## Deployment summary
+
+          | | |
+          |---|---|
+          | **URL** | ${SERVICE_URL} |
+          | **Revision** | ${REVISION} |
+          | **Commit** | ${GITHUB_SHA} |
+          | **Image** | \`${{ steps.image.outputs.ref }}\` |
+          | **Digest** | \`${{ steps.image.outputs.digest }}\` |
+          | **Rollback** | \`gcloud run services update-traffic ${SERVICE} --project=${PROJECT} --region=${REGION} --to-revisions=PREVIOUS_REVISION=100\` |
+          EOF
