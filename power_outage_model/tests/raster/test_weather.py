@@ -24,6 +24,16 @@ def test_negative_accumulation_rejected_even_if_difference_positive():
     with pytest.raises(ValueError,match='negative'): precipitation_amount(np.array([-10.]),np.array([-9.]))
 
 
+def test_precipitation_uses_bounded_grib_packing_uncertainty():
+    # Measured ICON steps 1 and 2: quantization error bounds from ecCodes.
+    tolerance=.00048828125+.0009765625
+    before=np.array([.05984563246892705]);after=np.array([.058869069968865095])
+    assert precipitation_amount(before,after,tolerance=tolerance)[0]==0
+    with pytest.raises(ValueError,match='negative'):
+        precipitation_amount(np.array([1.]),np.array([.99]),tolerance=tolerance)
+    with pytest.raises(ValueError):precipitation_amount(before,after,tolerance=float('inf'))
+
+
 def test_longitude_wrapping_and_north_up():
     a=np.array([[1,2,3],[4,5,6]])
     values,lons,lats=geographic_order(a,np.array([235,236,237]),np.array([24,25]))
@@ -43,6 +53,7 @@ def test_grib_decode_real_format(tmp_path):
     m=inspect_grib(path)
     assert m['field']=='T_2M' and m['level']==2 and m['end_step']==1
     assert m['units']=='K'
+    assert np.isfinite(m['metadata']['packingError']) and m['metadata']['packingError']>=0
 
 
 def test_cdo_native_remap_and_grid_specific_weights(tmp_path):

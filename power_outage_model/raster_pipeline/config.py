@@ -17,6 +17,7 @@ class PipelineConfig(Contract):
     risk_config: str | None = None
     native_grid: str | None = None
     native_grid_sha256: str | None = None
+    allow_static_gaps: bool = False
 
 
 def load_config(path):

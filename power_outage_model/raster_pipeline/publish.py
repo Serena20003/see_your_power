@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 import numpy as np
 from .contracts import GridSpec,StaticManifest,WEATHER_BANDS,WEATHER_UNITS,WEATHER_SEMANTICS,NODATA,HOUR,canonical,utc
-from .static import load_static
+from .static import load_static,supported_land,coverage_summary
 from .rasters import validate_cog
 
 LATEST='raster/v1/latest.json'
@@ -37,7 +37,11 @@ def validate_batch(manifest,store):
     if static.static_version!=manifest['static_version']:raise ValueError('static version mismatch')
     if static.fixture!=manifest.get('fixture',False):raise ValueError('fixture/live static mixing forbidden')
     context=load_static(static,grid,store)
-    if np.any(context.analysis_mask&(context.coverage[1]!=1)):raise ValueError('unexpected canopy gaps')
+    policy=manifest.get('coverage_policy','complete_land')
+    if policy not in ('complete_land','supported_land'):raise ValueError('unknown coverage policy')
+    domain=supported_land(context,allow_gaps=policy=='supported_land')
+    if policy=='supported_land' or 'coverage_summary' in manifest:
+        if manifest.get('coverage_summary')!=coverage_summary(context):raise ValueError('coverage summary does not match static inputs')
     intervals=manifest['intervals']
     if len(intervals)!=72:raise ValueError('exactly 72 target intervals required')
     start=_time(manifest['target_start'])
@@ -67,7 +71,7 @@ def validate_batch(manifest,store):
                     for band,sem in zip(WEATHER_BANDS,WEATHER_SEMANTICS):
                         if tags.get(band+'_temporal_semantics')!=sem:raise ValueError('invalid temporal semantics')
                 else:
-                    land=context.analysis_mask
+                    land=domain
                     if np.any(a[0,~land]!=NODATA) or np.any((a[0,land]<0)|(a[0,land]>1)):
                         raise ValueError('invalid/partial risk coverage or range')
                     if tags.get('value_kind')!='heuristic_score' or tags.get('calibrated')!='false' or tags.get('asset_conditioned')!='false':raise ValueError('invalid score labels')

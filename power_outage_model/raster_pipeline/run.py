@@ -17,7 +17,7 @@ from .download import download_inputs
 from .weather import prepare_weather
 from .windows import iter_windows,target_intervals
 from .risk import RiskCalculator,RiskConfig,load_risk
-from .static import load_static,save_static
+from .static import load_static,save_static,supported_land,coverage_summary
 from .rasters import write_weather_cog,write_risk_cog,validate_cog
 from .publish import publish_batch,LATEST
 
@@ -40,15 +40,16 @@ def _static(config,store,fixture):
     manifest=StaticManifest.model_validate_json(raw)
     if manifest.fixture!=fixture:raise ValueError('live/fixture static mixing forbidden')
     context=load_static(manifest,config.grid,store)
-    if np.any(context.analysis_mask&(context.coverage[1]!=1)):raise ValueError('insufficient canopy coverage')
+    supported_land(context,allow_gaps=config.allow_static_gaps)
     return context,{'key':config.static_manifest,'sha256':hashlib.sha256(raw).hexdigest()}
 
 
 def batch_identity(selection,fields,config,risk_config,static_ref,fixture,weather_recipe=None):
     from .decode import tool_versions
     import scipy,pyproj
-    recipe={'version':'weather-normalization-v3','native_grid_sha256':config.native_grid_sha256,
+    recipe={'version':'weather-normalization-v4','native_grid_sha256':config.native_grid_sha256,
         'precipitation_remap':'cdo_conservative_float64',
+        'precipitation_deaccumulation':'decoded_GRIB_packing_error_sum_with_1e-4_mm_floor',
         'scalar_remap':'fixture_exact_centers' if fixture else 'triangle_barycentric_v1_for_ICON_regular_ll_bilinear',
         'projection':'EPSG:5070','padding_degrees':2,
         'tools':{**tool_versions(),'scipy':scipy.__version__,'pyproj':pyproj.__version__}}
@@ -57,12 +58,14 @@ def batch_identity(selection,fields,config,risk_config,static_ref,fixture,weathe
         'target_start':selection.target_start.isoformat(),'grid':config.grid.model_dump(),
         'lookback_hours':config.lookback_hours,'risk_config':risk_config.model_dump(mode='json'),
         'static_manifest':static_ref,'fixture':fixture,'weather_recipe':recipe,
+        'coverage_policy':'supported_land' if config.allow_static_gaps else 'complete_land',
         'inputs':[{k:f.get(k) for k in ('run','field','start_step','end_step','sha256','grid_id','units','level','level_type','packing','vector_reference','url')}
                   for f in fields]}
     return digest(identity)[:32],recipe
 
 
 def produce(cube,selection,inventory,config,risk_config,context,static_ref,store,*,expected_generation,fixture=False,reuse_weather=None,weather_recipe=None):
+    domain=supported_land(context,allow_gaps=config.allow_static_gaps)
     batch_id,recipe=batch_identity(selection,inventory.get('fields',[]),config,risk_config,static_ref,fixture,weather_recipe)
     prefix=f'raster/v1/runs/{batch_id}'
     previous,_=store.read(prefix+'/manifest.json')
@@ -94,7 +97,7 @@ def produce(cube,selection,inventory,config,risk_config,context,static_ref,store
             if n is None:raise ValueError('missing target hour')
             if not cube.valid[n].all():raise ValueError('incomplete weather grid')
             result=calculator.calculate(window,context,risk_config)
-            if not np.array_equal(result.valid,context.analysis_mask):raise ValueError('incomplete risk history/environmental coverage')
+            if not np.array_equal(result.valid,domain):raise ValueError('incomplete risk history/environmental coverage')
             label=interval.start.strftime('%Y%m%dT%H%M%SZ')
             if reuse_weather is not None:weather=reuse_weather[h]['weather']
             else:
@@ -122,6 +125,8 @@ def produce(cube,selection,inventory,config,risk_config,context,static_ref,store
         'configuration_hash':digest(config.model_dump(exclude={'catalog'})),'weather_recipe':recipe,
         'value_kind':'heuristic_score','calibrated':False,'asset_conditioned':False,
         'quality_status':'complete','fixture':fixture,
+        'coverage_policy':'supported_land' if config.allow_static_gaps else 'complete_land',
+        'coverage_summary':coverage_summary(context),
         'inputs':{'key':inputs_key,'sha256':hashlib.sha256(inputs_raw).hexdigest()},
         'bands':{'weather':[{'name':n,'unit':u,'temporal_semantics':t} for n,u,t in zip(
             ('precipitation_mm','temperature_c','wind_speed_ms'),('mm','degC','m s-1'),('interval_total','endpoint_sample','endpoint_sample'))],
@@ -208,12 +213,13 @@ def run_fixture(cutoff,store,*,risk_config=None,missing_hour=None,dry_run=False)
         return run(cfg,cutoff,store,fixture_dir=tmp,work_dir=Path(tmp)/'work',dry_run=dry_run)
 
 
-def recalculate(weather_manifest,store,risk_config,*,static_manifest=None):
+def recalculate(weather_manifest,store,risk_config,*,static_manifest=None,allow_static_gaps=None):
     from .contracts import WEATHER_BANDS,WEATHER_UNITS
     from .publish import validate_batch
     validate_batch(weather_manifest,store)
     m=weather_manifest;grid=GridSpec.model_validate(m['grid'])
-    cfg=PipelineConfig(grid=grid,lookback_hours=m['lookback_hours'],static_manifest=static_manifest or m['static_manifest']['key'])
+    allow_gaps=m.get('coverage_policy')=='supported_land' if allow_static_gaps is None else allow_static_gaps
+    cfg=PipelineConfig(grid=grid,lookback_hours=m['lookback_hours'],static_manifest=static_manifest or m['static_manifest']['key'],allow_static_gaps=allow_gaps)
     context,static_ref=_static(cfg,store,m['fixture'])
     items=m['supporting_intervals']+m['intervals'];intervals=[];provenance=[]
     with tempfile.TemporaryDirectory() as tmp:

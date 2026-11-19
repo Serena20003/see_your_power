@@ -22,18 +22,11 @@ Output schema
   "heuristic_score": true
 }
 
-Limitations / fallback behaviour
----------------------------------
-build-static FAILED on 2026-11-18 — static config placeholders (analysis_land,
-california, assessed) were not filled; CONUS land mask unavailable.
-Error: ValueError: canopy: exact source checksum required
-
-This script therefore falls back to the fixture run at
-  output/raster/v1/runs/bca954e59e6da96a059e0fd28b905a44/risk/
-which covers a 2-cell 1° synthetic test grid over [-120,34]→[-118,35].
-Only counties that fall within that bbox receive a value; all others are absent
-in the output JSON (correct — the choropleth layer renders nothing for missing
-FIPS, which is the intended no-data behaviour).
+Input requirements
+------------------
+Reads the most recently published complete batch. Live mode refuses synthetic
+fixtures and never substitutes them for real weather. Use --allow-fixture only
+for an explicitly labeled local demonstration.
 
 Run from power_outage_model/:
   .venv312/bin/python scripts/aggregate_weather_risk.py
@@ -42,6 +35,7 @@ Run from power_outage_model/:
 from __future__ import annotations
 
 import io
+import argparse
 import json
 import sys
 import urllib.request
@@ -226,15 +220,20 @@ def aggregate_to_counties(
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    print("aggregate_weather_risk.py — fixture fallback mode", flush=True)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--allow-fixture", action="store_true")
+    parser.add_argument("--raster-output", type=Path, default=PM_ROOT / "output")
+    parser.add_argument("--output", type=Path, default=OUTPUT_JSON)
+    args = parser.parse_args()
+    print("aggregate_weather_risk.py — published raster batch", flush=True)
 
     # Load latest.json
-    with open(LATEST_JSON) as f:
+    with open(args.raster_output / "raster/v1/latest.json") as f:
         latest = json.load(f)
 
     batch_id  = latest["batch_id"]
     cutoff    = latest["cutoff"]
-    batch_dir = PM_ROOT / "output/raster/v1/runs" / batch_id
+    batch_dir = args.raster_output / "raster/v1/runs" / batch_id
     print(f"  Batch: {batch_id}  cutoff: {cutoff}", flush=True)
 
     # Read manifest to check fixture flag
@@ -242,6 +241,10 @@ def main() -> None:
     with open(manifest_path) as f:
         manifest = json.load(f)
     is_fixture = manifest.get("fixture", False)
+    if is_fixture and not args.allow_fixture:
+        raise ValueError("Refusing fixture weather in live mode; publish a real batch first")
+    if manifest.get("quality_status") != "complete" or len(manifest.get("intervals", [])) != 72:
+        raise ValueError("A complete 72-hour published batch is required")
 
     # Collect risk COG paths
     tif_paths = load_risk_tif_paths(batch_dir)
@@ -264,7 +267,7 @@ def main() -> None:
         print(f"    {fips}: {score:.6f}", flush=True)
 
     # Write output
-    OUTPUT_JSON.parent.mkdir(parents=True, exist_ok=True)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
     output = {
         "counties":        county_scores,
         "batch_id":        batch_id,
@@ -272,10 +275,12 @@ def main() -> None:
         "fixture":         is_fixture,
         "calibrated":      False,
         "heuristic_score": True,
+        "coverage_policy": manifest.get("coverage_policy", "complete_land"),
+        "coverage_summary": manifest.get("coverage_summary"),
     }
-    with open(OUTPUT_JSON, "w") as f:
+    with open(args.output, "w") as f:
         json.dump(output, f, indent=2)
-    print(f"\nWrote {OUTPUT_JSON}", flush=True)
+    print(f"\nWrote {args.output}", flush=True)
     print(f"County count: {len(county_scores)}", flush=True)
     if is_fixture:
         print("NOTE: fixture=true — only 1–2 counties covered (2-cell synthetic grid)", flush=True)
