@@ -1,3 +1,5 @@
+import { supabase } from "./lib/supabase/client";
+import type { ElectronicItem, HouseholdAction } from "./types/database";
 /**
  * API client for the Runway forecast service.
  *
@@ -282,7 +284,7 @@ export interface ApiPlanResponse {
   reply: string;
   items: ApiPlanItem[];
   source: "llm" | "fallback";
-  fallback_reason?: "missing_credentials" | "project_unavailable" | "runtime_unavailable" | "model_unavailable" | "access_denied" | "watsonx_error" | null;
+  fallback_reason?: "missing_credentials" | "project_unavailable" | "runtime_unavailable" | "model_unavailable" | "access_denied" | "watsonx_error" | "invalid_response" | null;
 }
 
 export interface PlanRequestPayload {
@@ -363,3 +365,41 @@ export function statusBadgeText(status: CountyForecast["status"]): string {
       return "Unavailable";
   }
 }
+
+
+export interface HouseholdState {
+  location_id: string;
+  electronic_items: ElectronicItem[];
+  plan_items: HouseholdAction[];
+  revision: number;
+  initialized: boolean;
+}
+
+export interface HouseholdReply extends HouseholdState {
+  reply: string;
+  saved: boolean;
+  source: "llm" | "fallback";
+}
+
+async function householdRequest<T>(path: string, body?: unknown): Promise<T> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Please sign in again to use your household plan.");
+  const response = await fetch(`${API_BASE}/v1/chat${path}`, {
+    method: body === undefined ? "GET" : "POST",
+    headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    signal: AbortSignal.timeout(120_000),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(typeof error.detail === "string" ? error.detail : "Could not load or save your household plan.");
+  }
+  return response.json() as Promise<T>;
+}
+
+export const fetchHouseholdState = (id: string) => householdRequest<HouseholdState>(`/state/${encodeURIComponent(id)}`);
+export const initializeHouseholdPlan = (id: string) => householdRequest<HouseholdState>(`/initialize/${encodeURIComponent(id)}`, {});
+export const sendHouseholdChat = (id: string, message: string, history: { role: "assistant" | "user"; text: string }[]) =>
+  householdRequest<HouseholdReply>("", { location_id: id, message, history: history.slice(-12) });
+export const saveActionCompletion = (locationId: string, id: string, completed: boolean, revision: number) =>
+  householdRequest<HouseholdState>(`/complete/${encodeURIComponent(locationId)}`, { id, completed, revision });

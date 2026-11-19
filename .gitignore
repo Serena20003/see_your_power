@@ -7,3 +7,8 @@ dist/
 
 data/
 .bob/
+docs/
+pycache
+hosting-costs/
+.DS_Store
+__pycache__

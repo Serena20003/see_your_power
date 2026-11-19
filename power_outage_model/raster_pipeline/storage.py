@@ -104,7 +104,7 @@ class GCSStore:
     def put(self,key,data):
         from google.api_core.exceptions import PreconditionFailed
         check_key(key)
-        try:self.bucket.blob(key).upload_from_string(data,if_generation_match=0,checksum='auto')
+        try:self.bucket.blob(key).upload_from_string(data,if_generation_match=0,checksum='crc32c')
         except PreconditionFailed:
             old,_=self.read(key)
             if old!=data:raise ValueError(f'immutable object mismatch: {key}')
@@ -113,7 +113,7 @@ class GCSStore:
         from google.api_core.exceptions import PreconditionFailed
         check_key(key)
         try:
-            self.bucket.blob(key).upload_from_string(data,if_generation_match=int(expected_generation or 0),checksum='auto')
+            self.bucket.blob(key).upload_from_string(data,if_generation_match=int(expected_generation or 0),checksum='crc32c')
             return True
         except PreconditionFailed:return False
 
