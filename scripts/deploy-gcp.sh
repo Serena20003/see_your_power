@@ -95,14 +95,14 @@ if [[ -z "$CANDIDATE_URL" ]]; then
 fi
 
 HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-  --max-time 30 "${CANDIDATE_URL}/healthz" || echo "000")
+  --max-time 30 "${CANDIDATE_URL}/health" || echo "000")
 
 if [[ "$HTTP_STATUS" != "200" ]]; then
   echo "✗ Smoke test failed (HTTP ${HTTP_STATUS}). Production traffic unchanged."
   echo "  Rollback: gcloud run services update-traffic ${SERVICE} --project=${PROJECT} --region=${REGION} --to-latest"
   exit 1
 fi
-echo "  /healthz → ${HTTP_STATUS} ✓"
+echo "  /health → ${HTTP_STATUS} ✓"
 
 # ── Promote to 100% traffic ───────────────────────────────────────────────────
 echo "▶ Promoting ${REVISION} to 100% traffic..."

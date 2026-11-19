@@ -1083,7 +1083,8 @@ def _build_weather_response(
 # Routes
 # ---------------------------------------------------------------------------
 
-@app.get("/healthz")
+@app.get("/health")
+@app.get("/healthz", include_in_schema=False)
 def health() -> dict:
     return {"status": "ok"}
 

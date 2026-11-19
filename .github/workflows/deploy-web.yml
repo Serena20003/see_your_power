@@ -147,13 +147,19 @@ jobs:
             --format=json | python -c 'import json,sys; print(next(t["url"] for t in json.load(sys.stdin)["status"]["traffic"] if t.get("tag")=="candidate"))')
 
           HTTP_STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
-            --max-time 30 "${CANDIDATE_URL}/healthz" || echo "000")
+            --max-time 30 "${CANDIDATE_URL}/health" || echo "000")
 
           if [[ "$HTTP_STATUS" != "200" ]]; then
             echo "Smoke test failed (HTTP ${HTTP_STATUS}). Production traffic unchanged."
             exit 1
           fi
-          echo "healthz → ${HTTP_STATUS} ✓"
+          echo "health → ${HTTP_STATUS} ✓"
+          curl -fsS --retry 3 --retry-delay 2 --retry-all-errors --max-time 30 \
+            "${CANDIDATE_URL}/health" | python -c 'import json,sys; assert json.load(sys.stdin)["status"] == "ok"'
+          curl -fsS --retry 3 --retry-delay 2 --retry-all-errors --max-time 30 \
+            "${CANDIDATE_URL}/v1/forecasts/06037" | python -c 'import json,sys; d=json.load(sys.stdin); assert d["status"] == "experimental"; assert d["next_24h"]["probability"] is None; assert d["next_24h"]["estimated_customer_impact"] >= 0'
+          curl -fsS --retry 3 --retry-delay 2 --retry-all-errors --max-time 30 \
+            "${CANDIDATE_URL}/data/county-boundaries.geojson" | python -c 'import json,sys; d=json.load(sys.stdin); assert d["type"] == "FeatureCollection" and len(d["features"]) > 0' 
 
       # Promote candidate to 100% only after smoke test passes
       - name: Promote to 100% traffic

@@ -19,6 +19,13 @@ def test_public_county_data_is_not_replaced_by_spa_html(client):
     assert r.json() == {'type': 'FeatureCollection', 'features': []}
 
 
+def test_public_cloud_run_health_path_and_local_legacy_alias(client):
+    for path in ('/health', '/healthz'):
+        r = client.get(path)
+        assert r.status_code == 200
+        assert r.json() == {'status': 'ok'}
+
+
 def test_client_side_route_still_gets_the_spa(client):
     r = client.get('/model-sources')
     assert r.status_code == 200

@@ -36,7 +36,7 @@ variables take precedence, then `.env.local`, then `.env.development.local`.
 Restart the API after changing credentials. The frontend uses the same-origin
 API by default (`VITE_API_BASE_URL=/` is also supported). Restart Vite after
 changing its settings. Vite forwards
-`/v1` and `/healthz` to `http://127.0.0.1:8080`; use `RUNWAY_DEV_API_URL` to
+`/v1` and `/health` to `http://127.0.0.1:8080`; use `RUNWAY_DEV_API_URL` to
 change that backend target. Pointing the browser directly at port 8080 bypasses
 the proxy and fails cross-origin checks because the API is same-origin only.
 A response marked `source: "fallback"` means the plan service responded but watsonx was unavailable. Check the API log for the cause.
@@ -92,7 +92,7 @@ explicitly selects the old offline demonstration.
 | `GET /v1/forecasts/{county_fips}` | Experimental customer impact for three fixed UTC days; outage probabilities remain null |
 | `GET /v1/planned-outages/{county_fips}` | Source-backed planned outage and PSPS notices |
 | `GET /v1/coverage` | County coverage metadata |
-| `GET /healthz` | Health check |
+| `GET /health` | Health check |
 
 ## Release gates for future outage probabilities
 
