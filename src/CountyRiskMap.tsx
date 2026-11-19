@@ -106,6 +106,8 @@ export default function CountyRiskMap({
   const [forecasts, setForecasts] = useState<Record<string, CountyForecast>>(
     () => Object.fromEntries(FIPS_LIST.map((fips) => [fips, buildDemoForecast(fips)]))
   );
+  const [showRiskLayer,    setShowRiskLayer]    = useState(true);
+  const [showEagleiLayer,  setShowEagleiLayer]  = useState(false);
   const [showCecLayer,     setShowCecLayer]     = useState(false);
   const [showCanopyLayer,  setShowCanopyLayer]  = useState(false);
   const [showWeatherLayer, setShowWeatherLayer] = useState(false);
@@ -152,14 +154,32 @@ export default function CountyRiskMap({
       const cur = latest.current;
       const pts = pointsGeoJSON(cur.forecasts, cur.activeFips, cur.activeWindow);
 
-      // ── County boundaries source (shared by canopy + future layers) ──────
-      // Fetch the county boundary GeoJSON, then fetch canopy values and join
-      // them as a `canopy` property before setting the source data.
+      // ── County boundaries source (shared by EAGLE-I, canopy + future layers) ──
+      // Fetch the county boundary GeoJSON, then fetch impact/canopy/weather
+      // values and join them as properties before setting the source data.
       fetch("/data/county-boundaries.geojson")
         .then((r) => r.json())
         .then((boundaryFC: FeatureCollection<Geometry, GeoJsonProperties>) => {
-          // Add source immediately with boundary data (canopy join follows).
+          // Add source immediately with boundary data (data join follows).
           map.addSource("county-boundaries", { type: "geojson", data: boundaryFC });
+
+          // ── eaglei-impact-fill layer (visibility: none until toggled) ────
+          map.addLayer({
+            id:     "eaglei-impact-fill",
+            type:   "fill",
+            source: "county-boundaries",
+            layout: { visibility: "none" },
+            paint:  {
+              "fill-color": [
+                "interpolate", ["linear"], ["coalesce", ["get", "impact"], 0],
+                0,    "rgba(219,234,254,0)",
+                200,  "rgba(147,197,253,0.5)",
+                1000, "rgba(37,99,235,0.65)",
+                5000, "rgba(30,58,138,0.8)",
+              ],
+              "fill-outline-color": "rgba(0,0,0,0)",
+            },
+          }, "county-risk-heat");
 
           // ── canopy-fill layer (visibility: none until toggled) ───────────
           map.addLayer({
@@ -197,22 +217,26 @@ export default function CountyRiskMap({
             },
           }, "county-risk-heat"); // insert below the heatmap layer
 
-          // Fetch canopy and weather risk in parallel, join both into source.
+          // Fetch EAGLE-I, canopy and weather risk in parallel, join all into source.
           Promise.all([
+            fetch("/data/eaglei_impact.json")
+              .then((r) => r.json() as Promise<{ counties: Record<string, number> }>)
+              .catch((err) => { console.warn("eaglei_impact.json fetch failed:", err); return null; }),
             fetch("/data/canopy_by_county.json")
               .then((r) => r.json() as Promise<{ counties: Record<string, number> }>)
               .catch((err) => { console.warn("canopy_by_county.json fetch failed:", err); return null; }),
             fetch("/data/weather_risk_by_county.json")
               .then((r) => r.json() as Promise<{ counties: Record<string, number> }>)
               .catch((err) => { console.warn("weather_risk_by_county.json fetch failed:", err); return null; }),
-          ]).then(([canopyData, weatherData]) => {
+          ]).then(([eagleiData, canopyData, weatherData]) => {
             const joined: FeatureCollection<Geometry, GeoJsonProperties> = {
               ...boundaryFC,
               features: boundaryFC.features.map((f: Feature<Geometry, GeoJsonProperties>) => {
                 const geoid        = f.properties?.["GEOID"] as string | undefined;
+                const impact       = geoid !== undefined ? (eagleiData?.counties[geoid] ?? null) : null;
                 const canopy       = geoid !== undefined ? (canopyData?.counties[geoid] ?? null) : null;
                 const weather_risk = geoid !== undefined ? (weatherData?.counties[geoid] ?? null) : null;
-                return { ...f, properties: { ...f.properties, canopy, weather_risk } };
+                return { ...f, properties: { ...f.properties, impact, canopy, weather_risk } };
               }),
             };
             (map.getSource("county-boundaries") as mapboxgl.GeoJSONSource).setData(joined);
@@ -249,6 +273,7 @@ export default function CountyRiskMap({
         id:     "county-risk-heat",
         type:   "heatmap",
         source: SOURCE,
+        layout: { visibility: "visible" },
         maxzoom: 15,
         paint:  {
           // Use pre-computed prob² so high-risk centres dominate the Gaussian
@@ -394,6 +419,39 @@ export default function CountyRiskMap({
           <label className="layer-panel-row">
             <input
               type="checkbox"
+              checked={showRiskLayer}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setShowRiskLayer(on);
+                const map = mapRef.current;
+                if (!map) return;
+                const v = on ? "visible" : "none";
+                map.setLayoutProperty("county-risk-heat",   "visibility", v);
+                map.setLayoutProperty("county-risk-halo",   "visibility", v);
+                map.setLayoutProperty("county-risk-dots",   "visibility", v);
+                map.setLayoutProperty("county-risk-values", "visibility", v);
+                map.setLayoutProperty("county-risk-names",  "visibility", v);
+              }}
+            />
+            Outage risk heatmap
+          </label>
+          <label className="layer-panel-row">
+            <input
+              type="checkbox"
+              checked={showEagleiLayer}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setShowEagleiLayer(on);
+                mapRef.current?.setLayoutProperty(
+                  "eaglei-impact-fill", "visibility", on ? "visible" : "none",
+                );
+              }}
+            />
+            EAGLE-I 2018 impact
+          </label>
+          <label className="layer-panel-row">
+            <input
+              type="checkbox"
               checked={showCecLayer}
               onChange={(e) => {
                 const on = e.target.checked;
@@ -437,6 +495,26 @@ export default function CountyRiskMap({
             These layers show contributing factors, not outage probabilities.
           </p>
         </div>
+        {showEagleiLayer && (
+          <div className="risk-map-legend eaglei-legend">
+            <span className="section-kicker">EAGLE-I IMPACT</span>
+            <span className="risk-legend-item">
+              <span className="risk-legend-swatch" style={{ background: "rgba(219,234,254,0.6)", border: "1px solid #ccc" }} />
+              Low
+            </span>
+            <span className="risk-legend-item">
+              <span className="risk-legend-swatch" style={{ background: "rgba(147,197,253,0.65)" }} />
+              Med
+            </span>
+            <span className="risk-legend-item">
+              <span className="risk-legend-swatch" style={{ background: "rgba(30,58,138,0.8)" }} />
+              High
+            </span>
+            <span className="risk-legend-note">
+              2018 outage customer-impact (experimental allocation — not an outage probability)
+            </span>
+          </div>
+        )}
         <div className="risk-map-legend">
           <span className="section-kicker">RISK</span>
           {([
