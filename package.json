@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 0.0.0.0",
+    "deploy:gcp": "scripts/deploy-gcp.sh"
   },
   "dependencies": {
     "@carbon/icons-react": "^11.90.0",

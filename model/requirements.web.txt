@@ -1,0 +1,8 @@
+# Web runtime dependencies — no training/geospatial libraries.
+# Keep this in sync with model/requirements.txt for the shared subset.
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+httpx==0.27.2
+google-cloud-storage==2.19.0
+python-dotenv==1.0.1

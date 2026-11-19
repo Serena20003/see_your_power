@@ -6,9 +6,17 @@ Routes:
   GET /v1/planned-outages/{county_fips}    → PlannedOutagesResponse
   GET /v1/coverage                         → list[CountyCoverage]
   GET /healthz                             → {"status": "ok"}
+  GET /*                                   → React SPA (dist/index.html fallback)
 
 In production, forecasts are written to PostgreSQL by inference/batch.py
 and served from there.  In dev/CI, this service reads from fixtures/.
+
+Static file serving:
+  When a compiled dist/ directory exists alongside the repo root, FastAPI
+  serves it at /.  API routes (/v1/*, /healthz) are registered first so they
+  always take precedence.  Unknown /v1/* paths return JSON 404.  All other
+  unmatched paths return index.html for client-side routing.
+  CORS middleware is intentionally absent: same-origin requests only.
 """
 from __future__ import annotations
 
@@ -22,8 +30,9 @@ from pathlib import Path
 from typing import Literal
 
 import httpx
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 from dotenv import load_dotenv
 
@@ -59,12 +68,39 @@ app = FastAPI(
     ),
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],   # Tighten in production
-    allow_methods=["GET", "POST"],
-    allow_headers=["*"],
-)
+# CORS is intentionally omitted: production uses same-origin requests and
+# local development uses the Vite proxy (/v1 → localhost:8080).
+
+# ---------------------------------------------------------------------------
+# Static file serving — dist/ from the compiled React build
+# ---------------------------------------------------------------------------
+
+# dist/ lives two levels up from model/service/ (i.e. the repo root)
+_DIST_DIR = Path(__file__).resolve().parents[2] / "dist"
+
+if _DIST_DIR.is_dir():
+    # Serve compiled assets at /assets/* etc. (excludes root index.html)
+    app.mount("/assets", StaticFiles(directory=str(_DIST_DIR / "assets")), name="assets")
+    logger.info("Serving frontend from %s", _DIST_DIR)
+else:
+    logger.info("No dist/ directory found; frontend not served (dev mode)")
+
+
+@app.exception_handler(404)
+async def _not_found_handler(request: Request, exc: Exception):
+    """
+    Unknown /v1/* API paths return JSON 404.
+    All other unmatched paths return the SPA index.html for client-side routing.
+    """
+    if request.url.path.startswith("/v1/"):
+        return JSONResponse(
+            status_code=404,
+            content={"detail": f"API route not found: {request.url.path}"},
+        )
+    index = _DIST_DIR / "index.html"
+    if index.is_file():
+        return FileResponse(str(index))
+    return JSONResponse(status_code=404, content={"detail": "Not found"})
 
 
 # ---------------------------------------------------------------------------

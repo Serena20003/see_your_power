@@ -1,0 +1,41 @@
+# .gcloudignore — files excluded when uploading source to Cloud Build.
+# Mirrors .dockerignore; keeps the upload fast and avoids sending secrets.
+
+.gcloudignore
+.git/
+.gitignore
+.DS_Store
+**/.DS_Store
+
+# JS artifacts and deps
+node_modules/
+dist/
+
+# Python caches and venvs
+**/__pycache__/
+**/*.pyc
+**/.venv/
+**/.venv*/
+model/.pytest_cache/
+.pytest_cache/
+
+# Local environment files — never upload secrets
+.env
+.env.*
+*.local
+
+# Large model/data directories — not needed in the web runtime
+power_outage_model/
+data/
+output/
+docs/
+
+# CI/CD config
+.github/
+
+# Plan docs
+*.md
+
+# Bob / tooling
+.bob/
+.superpowers/

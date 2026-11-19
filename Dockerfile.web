@@ -1,0 +1,53 @@
+# ── Stage 1: build React frontend ────────────────────────────────────────────
+FROM node:22-slim AS frontend-build
+
+WORKDIR /app
+
+# Install JS dependencies first (layer-cached unless lock changes)
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts
+
+# Copy source and build
+# Public env vars are baked into the bundle at build time via ARG/ENV
+ARG VITE_MAPBOX_ACCESS_TOKEN
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ENV VITE_MAPBOX_ACCESS_TOKEN=$VITE_MAPBOX_ACCESS_TOKEN
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+
+COPY index.html tsconfig.json vite.config.ts ./
+COPY src/ src/
+COPY public/ public/
+RUN npm run build
+
+
+# ── Stage 2: Python runtime ───────────────────────────────────────────────────
+FROM python:3.12-slim AS runtime
+
+WORKDIR /app
+
+# Install Python dependencies (web-only subset — no training libraries)
+COPY model/requirements.web.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application source
+COPY model/shared/   model/shared/
+COPY model/service/  model/service/
+COPY model/fixtures/ model/fixtures/
+
+# Copy compiled frontend from build stage
+COPY --from=frontend-build /app/dist/ dist/
+
+# Runtime environment
+ENV PYTHONUNBUFFERED=1
+ENV USE_FIXTURES=false
+# PORT is injected by Cloud Run; default to 8080 for local runs
+ENV PORT=8080
+
+EXPOSE 8080
+
+# model/ must be on the Python path so `from service.main import app` resolves
+ENV PYTHONPATH=/app/model
+
+CMD ["sh", "-c", "uvicorn service.main:app --host 0.0.0.0 --port $PORT"]

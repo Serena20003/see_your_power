@@ -1,0 +1,41 @@
+# .dockerignore — files excluded from the Docker build context.
+# Keeps the image small and prevents secrets/large data from being sent.
+
+# JS artifacts and deps
+node_modules/
+dist/
+
+# Python caches and venvs
+**/__pycache__/
+**/*.pyc
+**/.venv/
+**/.venv*/
+model/.pytest_cache/
+.pytest_cache/
+
+# Local environment files — secrets must never enter the image
+.env
+.env.*
+*.local
+
+# Large model/data directories — not needed in the web runtime
+power_outage_model/
+data/
+output/
+docs/
+
+# Git and editor
+.git/
+.gitignore
+.DS_Store
+**/.DS_Store
+
+# CI/CD config — not needed at runtime
+.github/
+
+# Plan docs
+*.md
+
+# Bob / tooling
+.bob/
+.superpowers/
