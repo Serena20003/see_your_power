@@ -11,7 +11,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
-import type { FeatureCollection, Point } from "geojson";
+import type { Feature, FeatureCollection, GeoJsonProperties, Geometry, Point } from "geojson";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { CountyForecast } from "./types";
 import { buildDemoForecast, fetchForecast } from "./api";
@@ -106,6 +106,12 @@ export default function CountyRiskMap({
   const [forecasts, setForecasts] = useState<Record<string, CountyForecast>>(
     () => Object.fromEntries(FIPS_LIST.map((fips) => [fips, buildDemoForecast(fips)]))
   );
+  const [layerPanelOpen,   setLayerPanelOpen]   = useState(true);
+  const [showRiskLayer,    setShowRiskLayer]    = useState(true);
+  const [showEagleiLayer,  setShowEagleiLayer]  = useState(false);
+  const [showCecLayer,     setShowCecLayer]     = useState(false);
+  const [showCanopyLayer,  setShowCanopyLayer]  = useState(false);
+  const [showWeatherLayer, setShowWeatherLayer] = useState(false);
   const accessToken   = (import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined) ?? "";
   latest.current      = { activeFips, activeWindow, onSelectFips, forecasts };
 
@@ -149,6 +155,117 @@ export default function CountyRiskMap({
       const cur = latest.current;
       const pts = pointsGeoJSON(cur.forecasts, cur.activeFips, cur.activeWindow);
 
+      // ── County boundaries source (shared by EAGLE-I, canopy + future layers) ──
+      // Fetch the county boundary GeoJSON, then fetch impact/canopy/weather
+      // values and join them as properties before setting the source data.
+      fetch("/data/county-boundaries.geojson")
+        .then((r) => r.json())
+        .then((boundaryFC: FeatureCollection<Geometry, GeoJsonProperties>) => {
+          // Add source immediately with boundary data (data join follows).
+          map.addSource("county-boundaries", { type: "geojson", data: boundaryFC });
+
+          // ── eaglei-impact-fill layer (visibility: none until toggled) ────
+          map.addLayer({
+            id:     "eaglei-impact-fill",
+            type:   "fill",
+            source: "county-boundaries",
+            layout: { visibility: "none" },
+            paint:  {
+              "fill-color": [
+                "interpolate", ["linear"], ["coalesce", ["get", "impact"], 0],
+                0,    "rgba(219,234,254,0)",
+                200,  "rgba(147,197,253,0.5)",
+                1000, "rgba(37,99,235,0.65)",
+                5000, "rgba(30,58,138,0.8)",
+              ],
+              "fill-outline-color": "rgba(0,0,0,0)",
+            },
+          }, "county-risk-heat");
+
+          // ── canopy-fill layer (visibility: none until toggled) ───────────
+          map.addLayer({
+            id:     "canopy-fill",
+            type:   "fill",
+            source: "county-boundaries",
+            layout: { visibility: "none" },
+            paint:  {
+              "fill-color": [
+                "interpolate", ["linear"], ["coalesce", ["get", "canopy"], 0],
+                0,   "rgba(255,255,255,0)",
+                50,  "rgba(100,180,80,0.5)",
+                100, "rgba(20,100,20,0.75)",
+              ],
+              "fill-outline-color": "rgba(0,0,0,0)",
+            },
+          }, "county-risk-heat"); // insert below the heatmap layer
+
+          // ── weather-risk-fill layer (visibility: none until toggled) ────
+          map.addLayer({
+            id:     "weather-risk-fill",
+            type:   "fill",
+            source: "county-boundaries",
+            layout: { visibility: "none" },
+            paint:  {
+              "fill-color": [
+                "interpolate", ["linear"], ["coalesce", ["get", "weather_risk"], 0],
+                0,    "rgba(0,20,220,0.5)",
+                0.25, "rgba(0,180,200,0.6)",
+                0.5,  "rgba(230,230,0,0.65)",
+                0.75, "rgba(255,140,0,0.7)",
+                1,    "rgba(220,30,30,0.75)",
+              ],
+              "fill-outline-color": "rgba(0,0,0,0)",
+            },
+          }, "county-risk-heat"); // insert below the heatmap layer
+
+          // Fetch EAGLE-I, canopy and weather risk in parallel, join all into source.
+          Promise.all([
+            fetch("/data/eaglei_impact.json")
+              .then((r) => r.json() as Promise<{ counties: Record<string, number> }>)
+              .catch((err) => { console.warn("eaglei_impact.json fetch failed:", err); return null; }),
+            fetch("/data/canopy_by_county.json")
+              .then((r) => r.json() as Promise<{ counties: Record<string, number> }>)
+              .catch((err) => { console.warn("canopy_by_county.json fetch failed:", err); return null; }),
+            fetch("/data/weather_risk_by_county.json")
+              .then((r) => r.json() as Promise<{ counties: Record<string, number> }>)
+              .catch((err) => { console.warn("weather_risk_by_county.json fetch failed:", err); return null; }),
+          ]).then(([eagleiData, canopyData, weatherData]) => {
+            const joined: FeatureCollection<Geometry, GeoJsonProperties> = {
+              ...boundaryFC,
+              features: boundaryFC.features.map((f: Feature<Geometry, GeoJsonProperties>) => {
+                const geoid        = f.properties?.["GEOID"] as string | undefined;
+                const impact       = geoid !== undefined ? (eagleiData?.counties[geoid] ?? null) : null;
+                const canopy       = geoid !== undefined ? (canopyData?.counties[geoid] ?? null) : null;
+                const weather_risk = geoid !== undefined ? (weatherData?.counties[geoid] ?? null) : null;
+                return { ...f, properties: { ...f.properties, impact, canopy, weather_risk } };
+              }),
+            };
+            (map.getSource("county-boundaries") as mapboxgl.GeoJSONSource).setData(joined);
+          });
+        })
+        .catch((err) => console.warn("county-boundaries.geojson fetch failed:", err));
+
+      // ── CEC transmission lines source + layer ────────────────────────────
+      map.addSource("cec-transmission", {
+        type: "geojson",
+        data: "/data/cec-transmission-lines.geojson",
+      });
+      map.addLayer({
+        id:     "cec-lines",
+        type:   "line",
+        source: "cec-transmission",
+        layout: { visibility: "none" },
+        paint:  {
+          "line-color": [
+            "match", ["get", "Type"],
+            "OH", "#f1c21b",
+            "#8d8d8d",
+          ],
+          "line-width":   1.5,
+          "line-opacity": 0.8,
+        },
+      });
+
       // ── Point source (heatmap + labels) ───────────────────────────────────
       map.addSource(SOURCE, { type: "geojson", data: pts });
 
@@ -157,6 +274,7 @@ export default function CountyRiskMap({
         id:     "county-risk-heat",
         type:   "heatmap",
         source: SOURCE,
+        layout: { visibility: "visible" },
         maxzoom: 15,
         paint:  {
           // Use pre-computed prob² so high-risk centres dominate the Gaussian
@@ -297,6 +415,119 @@ export default function CountyRiskMap({
         {mapOverlay && (
           <div className="risk-map-overlay">{mapOverlay}</div>
         )}
+        <div className={`map-layer-panel${layerPanelOpen ? "" : " map-layer-panel--collapsed"}`}>
+          <button
+            type="button"
+            className="layer-panel-header"
+            onClick={() => setLayerPanelOpen((v) => !v)}
+            aria-expanded={layerPanelOpen}
+          >
+            <span className="section-kicker">MAP LAYERS</span>
+            <span className="layer-panel-chevron" aria-hidden="true">
+              {layerPanelOpen ? "▾" : "▸"}
+            </span>
+          </button>
+          <div className="layer-panel-body">
+          <label className="layer-panel-row">
+            <input
+              type="checkbox"
+              checked={showRiskLayer}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setShowRiskLayer(on);
+                const map = mapRef.current;
+                if (!map) return;
+                const v = on ? "visible" : "none";
+                map.setLayoutProperty("county-risk-heat",   "visibility", v);
+                map.setLayoutProperty("county-risk-halo",   "visibility", v);
+                map.setLayoutProperty("county-risk-dots",   "visibility", v);
+                map.setLayoutProperty("county-risk-values", "visibility", v);
+                map.setLayoutProperty("county-risk-names",  "visibility", v);
+              }}
+            />
+            Outage risk heatmap
+          </label>
+          <label className="layer-panel-row">
+            <input
+              type="checkbox"
+              checked={showEagleiLayer}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setShowEagleiLayer(on);
+                mapRef.current?.setLayoutProperty(
+                  "eaglei-impact-fill", "visibility", on ? "visible" : "none",
+                );
+              }}
+            />
+            EAGLE-I 2018 impact
+          </label>
+          <label className="layer-panel-row">
+            <input
+              type="checkbox"
+              checked={showCecLayer}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setShowCecLayer(on);
+                mapRef.current?.setLayoutProperty(
+                  "cec-lines", "visibility", on ? "visible" : "none",
+                );
+              }}
+            />
+            CA transmission lines
+          </label>
+          <label className="layer-panel-row">
+            <input
+              type="checkbox"
+              checked={showCanopyLayer}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setShowCanopyLayer(on);
+                mapRef.current?.setLayoutProperty(
+                  "canopy-fill", "visibility", on ? "visible" : "none",
+                );
+              }}
+            />
+            Tree canopy (NLCD 2025)
+          </label>
+          <label className="layer-panel-row">
+            <input
+              type="checkbox"
+              checked={showWeatherLayer}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setShowWeatherLayer(on);
+                mapRef.current?.setLayoutProperty(
+                  "weather-risk-fill", "visibility", on ? "visible" : "none",
+                );
+              }}
+            />
+            DWD weather risk (heuristic)
+          </label>
+          <p className="layer-panel-disclaimer">
+            These layers show contributing factors, not outage probabilities.
+          </p>
+          </div>
+        </div>
+        {showEagleiLayer && (
+          <div className="risk-map-legend eaglei-legend">
+            <span className="section-kicker">EAGLE-I IMPACT</span>
+            <span className="risk-legend-item">
+              <span className="risk-legend-swatch" style={{ background: "rgba(219,234,254,0.6)", border: "1px solid #ccc" }} />
+              Low
+            </span>
+            <span className="risk-legend-item">
+              <span className="risk-legend-swatch" style={{ background: "rgba(147,197,253,0.65)" }} />
+              Med
+            </span>
+            <span className="risk-legend-item">
+              <span className="risk-legend-swatch" style={{ background: "rgba(30,58,138,0.8)" }} />
+              High
+            </span>
+            <span className="risk-legend-note">
+              2018 outage customer-impact (experimental allocation — not an outage probability)
+            </span>
+          </div>
+        )}
         <div className="risk-map-legend">
           <span className="section-kicker">RISK</span>
           {([
@@ -312,8 +543,67 @@ export default function CountyRiskMap({
           ))}
           <span className="risk-legend-note">Thermal heatmap · Click to select</span>
         </div>
+        {showCanopyLayer && (
+          <div className="risk-map-legend canopy-legend">
+            <span className="section-kicker">TREE CANOPY</span>
+            <span className="risk-legend-item">
+              <span className="risk-legend-swatch" style={{ background: "rgba(255,255,255,0.6)", border: "1px solid #ccc" }} />
+              0%
+            </span>
+            <span className="risk-legend-item">
+              <span className="risk-legend-swatch" style={{ background: "rgba(100,180,80,0.5)" }} />
+              50%
+            </span>
+            <span className="risk-legend-item">
+              <span className="risk-legend-swatch" style={{ background: "rgba(20,100,20,0.75)" }} />
+              100%
+            </span>
+            <span className="risk-legend-note">
+              Tree canopy cover — NLCD 2025 v2025-6 (static)
+            </span>
+          </div>
+        )}
+        {showWeatherLayer && (
+          <div className="risk-map-legend weather-legend">
+            <span className="section-kicker">DWD WEATHER RISK</span>
+            <span className="risk-legend-item">
+              <span className="risk-legend-swatch" style={{ background: "rgba(0,20,220,0.5)" }} />
+              Low
+            </span>
+            <span className="risk-legend-item">
+              <span className="risk-legend-swatch" style={{ background: "rgba(0,180,200,0.6)" }} />
+              Mod
+            </span>
+            <span className="risk-legend-item">
+              <span className="risk-legend-swatch" style={{ background: "rgba(230,230,0,0.65)" }} />
+              High
+            </span>
+            <span className="risk-legend-item">
+              <span className="risk-legend-swatch" style={{ background: "rgba(220,30,30,0.75)" }} />
+              Severe
+            </span>
+            <span className="risk-legend-note">
+              DWD weather risk score — heuristic, uncalibrated, not an outage probability
+            </span>
+          </div>
+        )}
+        {showCecLayer && (
+          <div className="risk-map-legend cec-legend">
+            <span className="section-kicker">CEC LINES</span>
+            <span className="risk-legend-item">
+              <span className="risk-legend-swatch" style={{ background: "#f1c21b" }} />
+              Overhead (OH)
+            </span>
+            <span className="risk-legend-item">
+              <span className="risk-legend-swatch" style={{ background: "#8d8d8d" }} />
+              Underground / other
+            </span>
+            <span className="risk-legend-note">
+              CA transmission lines (CEC — overhead/underground, California only)
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
