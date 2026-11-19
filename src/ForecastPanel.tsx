@@ -351,21 +351,15 @@ export default function ForecastPanel({ fips, onFipsChange, flyToCoords, mapOver
             <summary>How this forecast becomes your plan</summary>
             <div>
               <p>
-                <strong>Verified inputs</strong> — NOAA GFS weather forecasts, NWS
-                alerts, USGS canopy and terrain, and verified unplanned outage history
-                (planned and PSPS excluded).
+                <strong>Historical inputs</strong> — 2018 EAGLE-I county customer-outage records, county geometry and calendar dates. Within-county training locations are simulated.
               </p>
               <ArrowRight size={18} aria-hidden="true" />
               <p>
-                <strong>Prediction model</strong> — county-level gradient-boosted
-                onset model, calibrated per window. Counties without local history
-                receive a transferred estimate or an insufficient-data state.
+                <strong>Experimental estimate</strong> — a fitted gradient-boosted model aggregates representative point estimates into typical county customer impact. It does not estimate outage probability or duration. Weather and canopy are separate layers.
               </p>
               <ArrowRight size={18} aria-hidden="true" />
               <p>
-                <strong>Your plan</strong> — forecast conditions combined with your
-                household answers. Planned outages and PSPS notices appear separately
-                and never enter the model.
+                <strong>Your plan</strong> — use your saved household inventory to prepare. Review current weather and official outage notices alongside this experimental baseline.
               </p>
             </div>
           </details>
