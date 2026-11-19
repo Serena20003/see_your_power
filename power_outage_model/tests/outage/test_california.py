@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 import json
 import pytest
+import httpx
+from urllib.parse import parse_qs
 from raster_pipeline.storage import LocalStore
 from outage_model.adapters.california import CaliforniaAdapter, PIN
 
@@ -15,6 +17,38 @@ class Client:
         if params.get('returnIdsOnly'):return Response({'objectIds':[1]})
         return Response({'spatialReference':{'wkid':4326},'features':[] if self.missing else [
             {'attributes':{'OBJECTID':1,'IncidentId':'i','UtilityCompany':'SDGE','OutageType':'Not Planned','StartDate':1794844800000},'geometry':{'x':-117,'y':33}}]})
+    def post(self,url,data,timeout):
+        return self.get(url,data,timeout)
+
+
+def test_large_inventory_uses_post_to_avoid_arcgis_url_limit(tmp_path):
+    ids=list(range(43950998,43951499))
+    batches=[]
+
+    def respond(request):
+        # ArcGIS rejects long query URLs with an HTML 404 response.
+        if len(str(request.url))>2048:
+            return httpx.Response(404,text='Not Found')
+        if not request.url.path.endswith('/query'):
+            return httpx.Response(200,json=PIN)
+        if request.url.params.get('returnIdsOnly'):
+            return httpx.Response(200,json={'objectIds':ids})
+        assert request.method=='POST'
+        assert not request.url.query
+        params=parse_qs(request.content.decode())
+        assert params['f']==['json'] and params['outSR']==['4326']
+        chunk=list(map(int,params['objectIds'][0].split(',')))
+        batches.append(chunk)
+        return httpx.Response(200,json={'spatialReference':{'wkid':4326},'features':[
+            {'attributes':{'OBJECTID':oid,'IncidentId':str(oid),'UtilityCompany':'SDGE'},
+             'geometry':{'x':-117,'y':33}} for oid in chunk]})
+
+    adapter=CaliforniaAdapter(LocalStore(tmp_path),test_mode=True)
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        snap=adapter.fetch_snapshot(client,datetime.now(timezone.utc))
+    assert batches==[ids[:500],ids[500:]]
+    assert snap.complete_pages and snap.evidence['object_count']==501
+    assert len(adapter.normalize(snap))==501
 
 def test_collection_never_asserts_complete_coverage(tmp_path):
     adapter=CaliforniaAdapter(LocalStore(tmp_path),test_mode=True)

@@ -22,10 +22,12 @@ class CaliforniaAdapter:
         self.store=store; self.policy=policy or {}; self.test_mode=test_mode; self.page_size=page_size
     def fetch_snapshot(self,client,observed_at):
         observed_at=time(observed_at)
-        def get(path,params):
+        def fetch(path,params,*,post=False):
             for attempt in range(3):
                 try:
-                    response=client.get(URL+path,params={'f':'json',**params},timeout=30)
+                    query={'f':'json',**params}
+                    response=(client.post(URL+path,data=query,timeout=30) if post
+                              else client.get(URL+path,params=query,timeout=30))
                     response.raise_for_status(); data=response.json()
                     put_bytes(self.store,'outage/v1/sources/california/requests',canonical({'uri':URL+path,'query':params,'response':data}),'json')
                     if 'error' in data: raise ValueError(f"ArcGIS error: {data['error']}")
@@ -33,24 +35,25 @@ class CaliforniaAdapter:
                 except (OSError,ValueError,httpx.HTTPError) as exc:
                     if attempt==2: raise
                     clock.sleep(.2*(attempt+1))
-        meta=get('',{})
+        meta=fetch('',{})
         if schema_signature(meta)!=schema_signature(PIN): raise ValueError('California schema drift')
         oid=meta['objectIdField']
-        before=get('/query',{'where':'1=1','returnIdsOnly':'true'})
+        before=fetch('/query',{'where':'1=1','returnIdsOnly':'true'})
         ids=before.get('objectIds')
         if ids is None or len(ids)!=len(set(ids)): raise ValueError('missing/duplicate object-ID inventory')
         if len(ids)>100000: raise ValueError('source inventory exceeds reviewed collection bound')
         records=[]; pages=[]
         for start in range(0,len(ids),self.page_size):
             chunk=sorted(ids)[start:start+self.page_size]
-            page=get('/query',{'objectIds':','.join(map(str,chunk)),'outFields':'*','returnGeometry':'true','outSR':4326})
+            # Hundreds of object IDs exceed ArcGIS's GET URL limit (HTML 404).
+            page=fetch('/query',{'objectIds':','.join(map(str,chunk)),'outFields':'*','returnGeometry':'true','outSR':4326},post=True)
             if page.get('exceededTransferLimit'): raise ValueError('incomplete page')
             features=page.get('features',[])
             if sorted(f['attributes'][oid] for f in features)!=chunk: raise ValueError('missing page object IDs')
             wkid=page.get('spatialReference',{}).get('latestWkid',page.get('spatialReference',{}).get('wkid'))
             if wkid!=4326: raise ValueError('WGS84 conversion not confirmed')
             records.extend(features); pages.append(page)
-        after=get('/query',{'where':'1=1','returnIdsOnly':'true'})
+        after=fetch('/query',{'where':'1=1','returnIdsOnly':'true'})
         if sorted(after.get('objectIds') or [])!=sorted(ids): raise ValueError('source changed during pagination; retry collection')
         updated=meta.get('editingInfo',{}).get('lastEditDate')
         updated_at=datetime.fromtimestamp(updated/1000,timezone.utc) if updated else None
